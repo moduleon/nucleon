@@ -1,6 +1,6 @@
 /**
  * =============================
- *      Merlin JS Framework
+ *      Nucleon JS Framework
  * =============================
  *
  * The MIT License
