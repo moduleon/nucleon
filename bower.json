@@ -5,7 +5,7 @@
     "Kevin Marcachi <kevin.marcachi@gmail.com>"
   ],
   "description": "A lightweight, easy-to-use, javascript framework",
-  "main": "app.min.js",
+  "main": "app.js",
   "keywords": [
     "javascript",
     "framework",
