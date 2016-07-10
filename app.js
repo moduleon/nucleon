@@ -52,11 +52,11 @@
 
     /**
      * Build an url regarding method, url and parameters given.
-     * 
+     *
      * @param  {string} method
-     * @param  {string} url 
-     * @param  {object} param 
-     * @return {string} 
+     * @param  {string} url
+     * @param  {object} param
+     * @return {string}
      */
     function buildUrl(method, url, param) {
         if (method === 'GET' && param) {
@@ -84,7 +84,7 @@
 
     /**
      * Create a css transition.
-     * 
+     *
      * @param  {HTMLElement} el
      * @param  {string}      prop is the name of the property bound to the transition
      * @param  {string|int}  startValue is the value of the property before the transition
@@ -96,7 +96,7 @@
      * @param  {function}    postTransition is a function to run after running the transition.
      */
     function createTransition(el, prop, startValue, endValue, duration, curveType, delay, preTransition, postTransition) {
-        
+
         function transitionEndName() {
             var el = document.createElement('div');
             var transitionEndEventNames = {
@@ -139,16 +139,16 @@
                 setTimeout(function() { callback(); }, duration);
             }
         }
-        
+
         if (isInDOM(el) === false) {
             return;
         }
 
         var witness = 'calledAt';
         if ( (el[witness] === undefined || ((new Date()).getTime() - el[witness]) > duration) && el.style[prop] !== undefined) {
-            
+
             el[witness] = (new Date()).getTime();
-                
+
             el.style.display = '';
 
             if (preTransition) {
@@ -176,7 +176,7 @@
 
     /**
      * Make an HTMLElement collapse.
-     * 
+     *
      * @param  {HTMLElement}   el
      * @param  {int}           duration is the duration of the transition in milliseconds
      * @param  {Function}      callback is the function to launch after the transition
@@ -201,7 +201,7 @@
 
     /**
      * Run function through each iterable prop of a value.
-     *    
+     *
      * @param  {mixed}    target
      * @param  {function} func
      */
@@ -230,7 +230,7 @@
 
     /**
      * Run function through each iterable prop of a value in the reverse order.
-     * 
+     *
      * @param  {mixed}    target can be an array, a node list or event a string, but not an object.
      * @param  {function} func
      */
@@ -250,7 +250,7 @@
 
     /**
      * Create or upgrade a HTMLElement with overriden methods.
-     * 
+     *
      * @param  {string|HTMLElement} el
      * @return {HTMLElement}
      */
@@ -261,7 +261,7 @@
 
     /**
      * Escape css selector to avoid error in browsers.
-     * 
+     *
      * @param  {string} selector
      * @return {string}
      */
@@ -273,7 +273,7 @@
 
     /**
      * Make an HTMLElement uncollapse.
-     * 
+     *
      * @param  {HTMLElement}   el
      * @param  {int}           duration is the duration of the transition in milliseconds
      * @param  {Function}      callback is the function to launch after the transition
@@ -298,7 +298,7 @@
 
     /**
      * Make an HTMLElement fade in.
-     * 
+     *
      * @param  {HTMLElement}   el
      * @param  {int}           duration is the duration of the transition in milliseconds
      * @param  {Function}      callback is the function to launch after the transition
@@ -316,7 +316,7 @@
 
     /**
      * Make an HTMLElement fade out.
-     * 
+     *
      * @param  {HTMLElement}   el
      * @param  {int}           duration is the duration of the transition in milliseconds
      * @param  {Function}      callback is the function to launch after the transition
@@ -335,7 +335,7 @@
 
     /**
      * Find elements with css selector.
-     * 
+     *
      * @param  {string}            selector is a css selector
      * @param  {HTMLElement}       el       is an element where to look in
      * @return {HTMLElement|array}          depends if result as multiple
@@ -371,7 +371,7 @@
 
     /**
      * Get the first HTMLElement corresponding to a css selector.
-     * 
+     *
      * @param  {string}      selector is a css selector
      * @param  {HTMLElement} el       is an element where to look in
      * @return {HTMLElement}
@@ -383,7 +383,7 @@
 
     /**
      * Turn form into an object.
-     * 
+     *
      * @param  {form}  form
      * @return {object}
      */
@@ -407,13 +407,13 @@
 
     /**
      * Guess the value of a string expression for a given context.
-     * 
-     * @param  {string} string  is the expression to guess 
+     *
+     * @param  {string} string  is the expression to guess
      * @param  {object} context is an object containing properties we can use to guess the value
      * @return {mixed}
      */
     function guessValueOf(string, context) {
-        
+
         string = ('' + string).trim();
         if (!string) {
             return '';
@@ -430,10 +430,10 @@
          * In the given context, or in the global one.
          * @param  {string}          path   is the path to get to the prop (dot.separated)
          * @param  {mixed|array}     params is the arguments to give to the prop (if it's a function)
-         * @return {mixed|undefined}        will be what the property is (undefined if not found) 
+         * @return {mixed|undefined}        will be what the property is (undefined if not found)
          */
         function accessProperty(path, params) {
-        
+
             path = path.split('.');
 
             var target;
@@ -456,7 +456,7 @@
             }
 
             var owner = target;
-            
+
             each(path, function(key, prop){
                 if(target[prop] !== undefined){
                     if (target !== owner) {
@@ -495,7 +495,7 @@
         }
 
         // Constants accurate to any functions
-        
+
         var ARRAY_START  = '[';
         var ARRAY_END    = ']';
         var DOUBLE_QUOTE = '"';
@@ -513,18 +513,18 @@
          * Once launched, this function modify directly string value.
          */
         function treatParenthesis() {
-            
+
             // Pattern to find the deepest nested parenthesis
             var PARENTHESIS = /(?:(?!(?:[a-zA-Z0-9\.\_'"])).|^)(\([^\(\)]*\))/;
             var search;
             var result;
-            
+
             while (search = string.match(PARENTHESIS)) {
                 result = guessValueOf(search[1].substr(1, search[1].length - 2), context);
                 saveResult(result);
                 string = string.replace(search[1], result);
             }
-            
+
             return string;
         }
 
@@ -533,7 +533,7 @@
          * Once launched, this function modify directly string value.
          */
         function treatFunctions() {
-            
+
             /**
              * Extracts parameters from string (and define their value)
              * @param  {string} string
@@ -547,7 +547,7 @@
                 var index       = 0;
                 var openObjects = 0;
                 var openArrays  = 0;
-                
+
                 each(string, function(i, k) {
                     switch (k) {
                         case ARRAY_START:  openArrays++;  break;
@@ -612,7 +612,7 @@
             /**
              * Transform a string into a value, according to the current context
              * @param  {string} str
-             * @return {minxed}     
+             * @return {minxed}
              */
             function stringToValue(str) {
 
@@ -631,7 +631,7 @@
                     function addRowIfNeeded(i, value) {
                         value = value || '';
                         if (components[index] !== '') {
-                            // 
+                            //
                             if(components[index] !== '}' && components[index] !== ']'){
                                 if (value === ',' || value === '}' || value === ']') {
                                     components[index] = stringToValue(components[index]);
@@ -644,10 +644,10 @@
                                 }
                             }
                             index++;
-                        } 
+                        }
                         components[index] = value;
                     }
-             
+
                     each(str, function(i, k){
 
                         switch (k) {
@@ -673,7 +673,7 @@
                                     inSingleQuote = (inSingleQuote === false) ? true : false;
                                 }
                                 break;
-                            case SPACE: 
+                            case SPACE:
                                 if (inSingleQuote === false && inDoubleQuote === false) {
                                     k = '';
                                 }
@@ -693,26 +693,26 @@
                 }
 
                 if (getTypeOf(str) === 'string') {
-                    
+
                     // if already treated, return the result stored
                     if (treated[str]) {
                         return treated[str];
-                    
+
                     // if string is surrounded by quotes, it's considered as a string. Just return it without quotes
                     } else if ((str[0] === '"' && str[str.length - 1] === '"') || (str[0] === "'" && str[str.length - 1] === "'")) {
                         return str.substr(1, (str.length - 2));
-                    
+
                     // Elsewise, try to find what it is
                     } else {
-                        
+
                         switch (str) {
-                        
+
                             // If it's a reserved word
                             case 'undefined': return undefined;
                             case 'null' :     return null;
                             case 'false':     return false;
                             case 'true' :     return true;
-                        
+
                             // Otherwise...
                             default:
                                 var value;
@@ -735,7 +735,7 @@
                                             value = str;
                                         }
                                     }
-                                    
+
                                 }
                                 return value;
                         }
@@ -768,7 +768,7 @@
                 '|' : {}, // This symbol is only there because is a part of '||'
                 '||': function(index) { return components[index - 1] || components[index + 1] }
             }
-            
+
             var components    = [''];
             var index         = 0;
             var inEscaper     = false;
@@ -783,13 +783,13 @@
                 if (components[index]) {
                     components[index] = stringToValue(components[index]);
                     index++;
-                } 
+                }
                 components[index] = value;
             }
 
             // Separate and evaluate each component (except for symbols)
             each(string, function(i, k){
-                
+
                 switch (k) {
                     case DOUBLE_QUOTE:
                         if (inSingleQuote === false && inEscaper === false && openObjects === 0 && openArrays === 0) {
@@ -801,7 +801,7 @@
                             inSingleQuote = (inSingleQuote === false) ? true : false;
                         }
                         break;
-                    case SPACE: 
+                    case SPACE:
                         if (inSingleQuote === false && inDoubleQuote === false && openObjects === 0 && openArrays === 0) {
                             k = '';
                         }
@@ -811,7 +811,7 @@
                         if (inEscaper) {
                             k = '';
                         }
-                        break;  
+                        break;
                     case ARRAY_START:  openArrays++;  break;
                     case ARRAY_END:    openArrays--;  break;
                     case OBJECT_START: openObjects++; break;
@@ -833,9 +833,9 @@
                         } else {
                             components[index] += k;
                         }
-                        
+
                     }
-                    
+
                     inEscaper = false;
                 }
             });
@@ -875,27 +875,27 @@
     /**
      * Hydrate object properties from another object.
      * This function will look for a setter first before assigning a value the old fashion way.
-     * 
+     *
      * @param  {object}  obj   is the object to hydrate
      * @param  {object}  args  is the object to take new values from
      * @param  {boolean} force defines if we create a prop if it's not defined in the object
      * @return {object}        is the object hydrated
      */
     function hydrate(obj, args, force) {
-        
+
         if (getTypeOf(obj) === 'object' && getTypeOf(args) === 'object') {
-            
+
             each(args, function(prop, value){
-            
+
                 if (typeof obj[prop] !== 'undefined' || force) {
-                    
+
                     // If setter is defined, call it
                     var setter = 'set'+capitalize(prop);
                     if (getTypeOf(obj[setter]) === 'function') {
                         obj[setter](value);
-                    
+
                     } else {
-                        // If both properties are object, run hydrate through them                  
+                        // If both properties are object, run hydrate through them
                         if(getTypeOf(obj[prop]) === 'object' && getTypeOf(value) === 'object'){
                             hydrate(obj[prop], value);
                         // Otherwise, just replace the value
@@ -912,7 +912,7 @@
 
     /**
      * Check if an element is an HTMLElement.
-     * 
+     *
      * @param  {mixed}  el
      * @return {Boolean}
      */
@@ -932,7 +932,7 @@
 
     /**
      * Check if element is in DOM.
-     * 
+     *
      * @param  {HTMLElement}  el
      * @return {Boolean}
      */
@@ -942,7 +942,7 @@
 
     /**
      * Override method from array messing with items.
-     * 
+     *
      * @param  {array}    ary
      * @param  {function} callback
      */
@@ -963,7 +963,7 @@
 
     /**
      * Turn string into an html element.
-     * 
+     *
      * @param  {string} string
      * @return {HTMLElement}
      */
@@ -1007,7 +1007,7 @@
         temp.innerHTML = string;
         var el = temp.firstChild.cloneNode(true);
         temp = null;
-        
+
         return el;
     }
 
@@ -1027,7 +1027,7 @@
 
     /**
      * Perform an ajax request.
-     * 
+     *
      * @param  {object} params
      */
     function request(params) {
@@ -1183,9 +1183,9 @@
 
     /**
      * Check if a HTMLElement matches a css selctor.
-     * 
+     *
      * @param  {HTMLElement} el
-     * @param  {string}      selector 
+     * @param  {string}      selector
      * @return {boolean}
      */
     function selectorMatches(el, selector) {
@@ -1209,8 +1209,8 @@
     }
 
     /**
-     * Watch for object changes. 
-     * 
+     * Watch for object changes.
+     *
      * @param  {object}      obj     is the object to watch
      * @param  {function}    handler is the callback function waiting for changes.
      *                               Can take 3 arguments:
@@ -1224,8 +1224,8 @@
 
         /**
          * Redefine a property in an object.
-         * 
-         * @param  {object}    obj    is the object where to redefine a prop 
+         *
+         * @param  {object}    obj    is the object where to redefine a prop
          * @param  {string}    prop   is the name of the prop to redefine
          * @param  {function}  getter is a function which return the value
          * @param  {function}  setter is a function which set the value
@@ -1247,7 +1247,7 @@
 
         /**
          * Watch for changes in a object prop.
-         * 
+         *
          * @param {object}   obj     is the object to observe
          * @param {string}   prop    is the name of the property to observe
          * @param {function} handler is the function to run in case of a change
@@ -1287,7 +1287,7 @@
 
         /**
          * Run a callback function when changes in array.
-         * 
+         *
          * @param  {array}    ary     is the array to observe
          * @param  {function} handler is the handler to call in case of a change
          * @return {void}
@@ -1297,12 +1297,12 @@
         }
 
         /**
-         * Handle what to do if object prop is an array or an object. 
-         * 
+         * Handle what to do if object prop is an array or an object.
+         *
          * @param  {object}      obj       is the object containing an object or an array
          * @param  {string}      handler   is the name of the prop where it's stored in the object
          * @param  {string}      path      is the path where object or array is contained (dot.separated)
-         * @param  {mixed}       value     is the object or array 
+         * @param  {mixed}       value     is the object or array
          * @param  {string|void} valueType is the type of the value
          * @return {object}                is the object given in argument
          */
@@ -1322,7 +1322,7 @@
             }
             return obj;
         }
-        
+
         if (getTypeOf(obj) === 'object') {
             var actualPath = '';
             var valueType;
@@ -1352,13 +1352,13 @@
                 }
             });
         }
-        
+
         return obj;
     }
 
     /**
-     * Disable callback on property changes. 
-     * 
+     * Disable callback on property changes.
+     *
      * @param  {object} obj
      * @return {object}
      */
@@ -1395,14 +1395,14 @@
 
     /**
      * Upgrade HTMLElement methods.
-     * 
+     *
      * @param  {HTMLElement} el
      * @return {HTMLElement}
      */
     function up(el) {
-        
+
         if(el.upped === undefined) {
-            
+
             if (isHTMLElement(el)) {
 
                 // el.hasClass : check if class exists
@@ -1665,7 +1665,7 @@
             // If action url must be added to browser history
             if (this.history === true) {
                 var that = this;
-                // We check if the method used was POST. 
+                // We check if the method used was POST.
                 // In that case the url to push in history must be re-built, according to form values, to match with a GET alike link.
                 var params = method === 'POST' ? formToObject(e.target) : null;
                 historic.addEntry(buildUrl('GET', url, params), function() {
@@ -1683,7 +1683,7 @@
     };
 
     /**
-     * Controller is an object containing actions for differents url. 
+     * Controller is an object containing actions for differents url.
      * App call each of them in case of a click on a button or on submission of a form.
      *
      * @param {string} name
@@ -1697,11 +1697,11 @@
 
         // Add an action to the controller
         this.addAction = function(name, args) {
-            
+
             if (getTypeOf(args) !== 'object') {
                 throw 'Arguments to add an action must be a JSON.';
             }
-                
+
             if (!name) {
                 throw 'Action must have a name';
             } else if(actions[name]) {
@@ -1751,7 +1751,7 @@
         // Utility functions
 
         /**
-         * Subscribe to changes, and run an handler.          
+         * Subscribe to changes, and run an handler.
          */
         function subscribeToOuterChanges(obj, handler, path) {
             var actualPath = '';
@@ -1812,7 +1812,7 @@
                     setPropertyValue(path, newValue);
                 }, path);
             }
-            
+
             // Publish a message if we should
             if(publish){
                 pubsub.publish(path+':change', oldValue, newValue);
@@ -1853,7 +1853,7 @@
 
         return this;
     };
-    
+
     /**
      * Generic pub/sub constructor.
      */
@@ -1890,7 +1890,7 @@
 
     /**
      * Route is an object checking if a url match with a certain pattern and method.
-     * 
+     *
      * @param {object} args is an object containing configuration elements.
      */
     var Route = function(args) {
@@ -1941,7 +1941,7 @@
         this.setParams = function(params) {
             var shortcuts = {
                 'number': '[0-9]*',
-                'word': '[a-zA-Z0-9%]*' 
+                'word': '[a-zA-Z0-9%]*'
             };
             if (typeof params === 'object') {
                 each(params, function(prop, value){
@@ -2017,7 +2017,7 @@
 
     /**
      * View constructor.
-     * 
+     *
      * @param {object}      params  is containing all properties to build the view.
      * @param {Model|array} context is a model, or a collection of, to bind to the view.
      */
@@ -2031,7 +2031,7 @@
         }
 
         // Utility functions
-        
+
         function createTemplate(string) {
             return el(escapeSrc(string));
         }
@@ -2045,7 +2045,7 @@
         }
 
         function bindModel(element, references, subscriptions) {
-            
+
             if (!element) {
                 return;
             }
@@ -2073,7 +2073,7 @@
 
             function extractModelProps(string) {
                 string = ('' + string).trim();
-                
+
                 var PROPERTY = /[a-zA-Z0-9\._]*/g;
                 var props = string.match(PROPERTY);
 
@@ -2149,7 +2149,7 @@
                     };
                     // Subscribe to changes
                     model.getPubsub().subscribe(msg, callback);
-                    // If references is defined, we are in a loop. 
+                    // If references is defined, we are in a loop.
                     // We save subscriptions in case we have to unsubscribe
                     if (references) {
                         subscriptions.push({msg: msg, callback: callback});
@@ -2183,18 +2183,18 @@
                     }
                 });
             }
-            
+
             var ELEMENT_NODE = 1;
             var TEXT_NODE    = 3;
-            
+
             switch (element.nodeType) {
-                
+
                 case ELEMENT_NODE:
-                    
+
                     var attr;
 
                     if (attr = element.getAttribute('data-loop')) {
-                        
+
                         var LOOP_REF    = / in .*/g;
                         var LOOP_OUTPUT = /.* in /g;
 
@@ -2215,12 +2215,12 @@
                         var prop       = replaceReferences(attr.replace(LOOP_OUTPUT, ''));
                         var output     = attr.replace(LOOP_REF, '');
                         var loopMethod = insertMethod === 'after' ? eachReverse : each;
-                        
+
                         // Storages
                         var loopElements       = []; // For saving html elements generated
                         var loopItems          = []; // For saving objects to these elements
                         var itemsSubscriptions = []; // For saving subscriptions taken for each elements rendering
-                        
+
                         initAndHandleChanges(prop, function(items){
 
                             // If no items, just remove all.
@@ -2247,10 +2247,10 @@
                                         lastToLeave = child;
                                     } else {
                                         (function(lastToLeave){
-                                            stage.handleLeaving(lastToLeave, function(){    
+                                            stage.handleLeaving(lastToLeave, function(){
                                                 lastToLeave.parentNode.removeChild(lastToLeave);
                                             });
-                                            
+
                                         }(lastToLeave));
                                         lastToLeave = child;
                                     }
@@ -2274,15 +2274,15 @@
                                             references = JSON.parse(JSON.stringify(references));
                                         }
                                         references[output] = prop +'.'+ i;
-                                        
+
                                         var itemSubscriptions = [];
                                         itemsSubscriptions.push(itemSubscriptions);
-                                        
+
                                         var child = bindModel(element.cloneNode(true), references, itemSubscriptions);
                                         from[insertMethod](child);
                                         // Handle effects if there are
                                         stage.handleEntering(child);
-                                
+
                                         loopElements.push(child);
                                         loopItems.push(item);
                                     }
@@ -2292,9 +2292,9 @@
 
                         return;
                     }
-                    
+
                     if (attr = element.getAttribute('data-bind')) {
-                        
+
                         var tag = element.tagName.toLowerCase();
                         var prop = replaceReferences(attr);
                         var model = findModelFromProp(prop);
@@ -2419,7 +2419,7 @@
                     }
 
                     break;
-                
+
                 case TEXT_NODE:
                     // Save locally the content of the textnode
                     var textContent = element.textContent ? 'textContent' : 'nodeValue'; // IE8 polyfill
@@ -2457,7 +2457,7 @@
         }
 
         // Define local vars we need
-        
+
         var parentView;
         var root;
         var template;
@@ -2503,11 +2503,11 @@
 
         /**
          * Render view in DOM.
-         * 
+         *
          * @param  {Function} callback
          */
         this.render = function(preTransition, postTransition) {
-            
+
             function tryIntegrate() {
                 // If root could be found and template is not the one to replace
                 root = getRoot();
@@ -2521,7 +2521,7 @@
                             }
                             stage.handleEntering(template, postTransition);
                         });
-                    
+
                     } else {
                         if (preTransition){
                             preTransition();
@@ -2583,9 +2583,9 @@
     };
 
     // ================
-    // Services 
+    // Services
     // ================
-    
+
     // Storage for init functions to run before returning the app.
     var initStorage = [];
 
@@ -2667,7 +2667,7 @@
                 this.returnValue = false;
             }
             copy.target = copy.srcElement = findRealElement(e.target || e.srcElement);
-            
+
             return copy;
         }
 
@@ -2717,7 +2717,7 @@
 
         /**
          * Add a cross-browser event listener to an element
-         * 
+         *
          * @param {string}      evt
          * @param {HTMLElement} el
          * @param {Function}    fn
@@ -2738,7 +2738,7 @@
 
         /**
          * Remove an event listener from an element
-         * 
+         *
          * @param {string}      evt
          * @param {HTMLElement} el
          * @param {Function}    fn
@@ -2757,10 +2757,10 @@
 
         /**
          * Add an event listener to dom elements matching with a given css selector
-         * 
+         *
          * @param  {string}   evt      can be a comma separated events
          * @param  {string}   selector is a css selector
-         * @param  {Function} fn       
+         * @param  {Function} fn
          */
         this.on = function(evt, selector, fn) {
             each(extractEvents(evt), function(i, e){
@@ -2780,10 +2780,10 @@
 
         /**
          * Remove an event listener to dom elements matching with a given css selector
-         * 
+         *
          * @param  {string}   evt      can be a comma separated events
          * @param  {string}   selector is a css selector
-         * @param  {Function} fn       
+         * @param  {Function} fn
          */
         this.off = function(evt, selector, fn) {
             each(extractEvents(evt), function(i, e){
@@ -2804,13 +2804,13 @@
 
         /**
          * Add an event to dom elements matching with a given css selector
-         * 
+         *
          * @param  {string}   evt      can be a comma separated events
          * @param  {string}   selector is a css selector
-         * @param  {Function} fn       
+         * @param  {Function} fn
          */
         this.trigger = function(evt, selector) {
-            
+
             if (isHTMLElement(selector) === true || selector === window || selector === document) {
                 each(extractEvents(evt), function(i, e){
                     dispatchEvent(createEvent(e), selector);
@@ -2843,7 +2843,7 @@
         };
 
         /**
-         * Remove all listeners attached to css selector     
+         * Remove all listeners attached to css selector
          */
         this.clear = function() {
             for (var evt in listeners) {
@@ -2852,10 +2852,10 @@
             listeners = {};
             // Relaunch the controller initialization, based on event
             controllers.init();
-        };  
+        };
     };
 
-    /** 
+    /**
      * Controllers handler service.
      */
     var controllers = new function() {
@@ -2882,7 +2882,7 @@
             // In some cases, a click on a link must not activate a controller action, but just call a regular url.
             // In those cases, just add an attribute no-follow="true" in the <a> tag.
             if (!target.getAttribute('no-follow')) {
-                
+
                 var url = target.tagName === 'FORM' ? target.action : target.href;
                 var method = target.tagName === 'FORM' ? target.method.toUpperCase() : 'GET';
                 var action;
@@ -2928,9 +2928,9 @@
         // Container for files in process
         var processing = {};
 
-        /** 
+        /**
          * Include a js or css file, and provide a callback
-         * 
+         *
          * @param  {string]}  url        is the url where file is stored
          * @param  {Function} callback   is the function to run when file is included
          * @param  {string}   forcedType is the forced type of the file to include ('css' or 'js')
@@ -2947,17 +2947,17 @@
                     'js': /\.js$/,
                     'css': /\.css$/
                 };
-                
+
                 if(forcedType && TYPES[forcedType]){
                     return forcedType;
-                } 
-                
+                }
+
                 for (var t in TYPES) {
                     if (TYPES[t].test(url)) {
                         return t;
                     }
                 }
-                
+
                 throw 'files.include allows you to include css or js files only';
             }
 
@@ -2965,7 +2965,7 @@
             function isIncluded(url, type) {
                 var tag  = type === 'js' ? 'script' : 'link';
                 var attr = type === 'js' ? 'src' : 'href';
-                
+
                 return typeof find(tag + '[' + attr + '*="' + url + '"]')[0] !== 'undefined';
             }
 
@@ -2976,7 +2976,7 @@
                 var tagAttr = type === 'js' ? 'src' : 'href';
                 var tagType = type === 'js' ? 'text/javascript' : 'text/css';
                 var tagRel  = type === 'js' ? null : 'stylesheet';
-                
+
                 var file      = document.createElement(tagName);
                 file.type     = tagType;
                 file[tagAttr] = url;
@@ -3083,7 +3083,7 @@
                 // Without it, the listener catches it, and the page reload indefinitely.
                 setTimeout(function() {
                     events.addListener('popstate', window, function(e) {
-                        
+
                         // Try to load callback if stored
                         if (window.history.state) {
                             index = window.history.state.index;
@@ -3096,7 +3096,7 @@
                         if (redirect(window.location.href, false) !== undefined) {
                             return false;
                         }
-                        
+
                         // In last case, reload
                         window.location.replace(window.location.href);
                     });
@@ -3119,7 +3119,7 @@
 
         /**
          * Set a value in memory.
-         * 
+         *
          * @param {string} path  is the path to the property (dot.separated)
          * @param {mixed}  value is the value to save in this property
          */
@@ -3140,7 +3140,7 @@
 
         /**
          * Add an item in a collection in memory.
-         * 
+         *
          * @param {string} path is the path to the property (dot.separated)
          * @param {mixed}  item is the item to add in the collection
          */
@@ -3155,7 +3155,7 @@
 
         /**
          * Get a value in memory.
-         * 
+         *
          * @param {string} path is the path to the property (dot.separated)
          * @return {mixed}
          */
@@ -3165,7 +3165,7 @@
 
         /**
          * Remove a value from memory.
-         * 
+         *
          * @param {string} path is the path to the property (dot.separated)
          */
         this.remove = function(path) {
@@ -3196,7 +3196,7 @@
      * Save and return models.
      */
     var models = new function() {
-        
+
         // Models storage
         var storage = {};
 
@@ -3207,7 +3207,7 @@
             } else if (getTypeOf(model) !== 'object') {
                 throw 'Model must be an JSON.';
             }
-            
+
             storage[name] = new Model(model);
 
             return storage[name];
@@ -3232,7 +3232,7 @@
             // HTMLElements
             // ------------
 
-            // Overrive each HTMLElement to give it an up() function, 
+            // Overrive each HTMLElement to give it an up() function,
             // Allowing them to be overriden at any time to retrieve jQuery like methods (before, after, prepend, etc...).
             // It is unecessary to call it if element has been created with app.el() method.
             if (typeof HTMLElement.prototype.up !== 'function') {
@@ -3293,7 +3293,7 @@
      * Services container.
      */
     var services = new function() {
-        
+
         var container = {};
 
         // Check if a service with an identical alias has already been registered
@@ -3303,7 +3303,7 @@
 
         /**
          * Add a service in container
-         * 
+         *
          * @param {string} name
          * @param {object} obj
          */
@@ -3317,7 +3317,7 @@
 
         /**
          * Get a service from the container.
-         * 
+         *
          * @param  {string} name
          * @return {object}
          */
@@ -3333,7 +3333,7 @@
      * Handle effects on element entering and leaving the dom.
      */
     var stage = new function() {
-        
+
         var effectsIn   = [];
         var effectsOut  = [];
         var elementsIn  = [];
@@ -3390,7 +3390,7 @@
 
         // Add a view
         this.add = function(name, params, context) {
-            
+
             if (storage[name]) {
                 throw 'View with name "'+name+'" is already registered.';
             } else if (getTypeOf(params) !== 'object') {
@@ -3398,7 +3398,7 @@
             } else if (context && getTypeOf(context) !== 'object' && getTypeOf(context) !== 'array'){
                 throw 'View context must be JSON or an array of JSON';
             }
-            
+
             storage[name] = new View(params, context);
 
             return storage[name];
@@ -3411,8 +3411,8 @@
             }
             return storage[name];
         }
-    };  
-    
+    };
+
     // ====================
     // Initialization
     // ====================
@@ -3432,11 +3432,11 @@
     // ====================
 
     return {
-        
+
         // Infos
         authors: authors,
         version: version,
-        
+
         // Services
         channel: channel,
         controllers: controllers,
@@ -3446,7 +3446,7 @@
         views: views,
         memory: memory,
         services: services,
-        
+
         // Utility methods
         el: el,
         find: find,
