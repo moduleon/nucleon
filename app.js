@@ -423,10 +423,6 @@
             throw 'Context must be an object';
         }
 
-        // if(context && getTypeOf(context) !== 'array') {
-        //     context = [context];
-        // }
-
         // Utility functions
 
         /**
