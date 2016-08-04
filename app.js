@@ -419,9 +419,13 @@
             return '';
         }
 
-        if(context && getTypeOf(context) !== 'array') {
-            context = [context];
+        if(context && getTypeOf(context) !== 'object') {
+            throw 'Context must be an object';
         }
+
+        // if(context && getTypeOf(context) !== 'array') {
+        //     context = [context];
+        // }
 
         // Utility functions
 
@@ -436,23 +440,14 @@
 
             path = path.split('.');
 
-            var target;
+            var target = context ? context[path[0]] : null;
 
-            if (context) {
-                each(context, function(i, subcontext){
-                    if(subcontext[path[0]] !== undefined){
-                        target = subcontext;
-                        return false;
-                    }
-                });
-            }
-
-            if (!target) {
-                if (window[path[0]]) {
-                    target = window;
-                } else {
-                    return;
-                }
+            if (context && context[path[0]]) {
+                target = context;
+            } else if (window[path[0]]) {
+                target = window;
+            } else {
+                return;
             }
 
             var owner = target;
@@ -1105,7 +1100,7 @@
         var request = new(XMLHttpRequest || ActiveXObject)('MSXML2.XMLHTTP.3.0');
 
         // Cross-sites request handling
-        if (cors) {
+        if (cors === true) {
             if ('withCredentials' in request) {
                 // Do nothing
             } else {
@@ -2019,16 +2014,11 @@
      * View constructor.
      *
      * @param {object}      params  is containing all properties to build the view.
-     * @param {Model|array} context is a model, or a collection of, to bind to the view.
+     * @param {Model|array} context is an object containing app model.
      */
-    var View = function(params, context) {
+    var View = function(params) {
 
-        if (getTypeOf(context) !== 'array') {
-            if (context instanceof Model === false) {
-                context = new Model(context);
-            }
-            context = [context];
-        }
+        var context = params.context || modelStorage;
 
         // Utility functions
 
@@ -2044,7 +2034,7 @@
             return str.replace(/^#/, '');
         }
 
-        function bindModel(element, references, subscriptions) {
+        function bindContext(element, references, subscriptions) {
 
             if (!element) {
                 return;
@@ -2081,7 +2071,7 @@
                     if (prop) {
                         prop = replaceReferences(prop);
                         prop = findModelFromProp(prop) ? prop : '';
-                        prop = prop.replace('.length', '').trim()
+                        prop = prop.replace('.length', '').trim();
                     }
                     return prop;
                 });
@@ -2104,18 +2094,18 @@
             }
 
             function getValueOf(expr) {
-                if(references){
-                    each(references, function(reference, prop){
-                        if (expr.indexOf(reference+'.') !== -1) {
-                            expr = expr.replace(reference+'.', prop+'.');
-                        } else if( expr.indexOf('('+reference+')') !== -1) {
-                            expr = expr.replace(reference, prop);
-                        }
-                    });
+                if (references) {
+                    expr = replaceReferences(expr);
                 }
-
                 var result = guessValueOf(expr, context);
+
                 return result === undefined ? '' : result;
+            }
+
+            function findModelFromProp(prop) {
+                prop = prop.split('.');
+
+                return context[prop[0]];
             }
 
             function replaceReferences(prop) {
@@ -2134,16 +2124,19 @@
             }
 
             function initAndHandleChanges(prop, initFunc) {
-                // Init value
                 initFunc(getValueOf(prop));
-                // Subscribe to changes
                 subscribeToChanges(prop, initFunc);
             }
 
+            function getMsgFromProp(prop) {
+                return prop.replace(/^[a-zA-Z0-9]+\.+/, '')+':change';
+            }
+
             function subscribeToChanges(prop, func) {
+
                 var model = findModelFromProp(prop);
                 if (model) {
-                    var msg = prop +':change';
+                    var msg = getMsgFromProp(prop);
                     var callback = function(msg, oldValue, newValue){
                         func(newValue);
                     };
@@ -2152,32 +2145,19 @@
                     // If references is defined, we are in a loop.
                     // We save subscriptions in case we have to unsubscribe
                     if (references) {
-                        subscriptions.push({msg: msg, callback: callback});
+                        subscriptions.push({msg: msg, callback: callback, model: model});
                     }
                 }
             }
 
-            function unsubscribeToChanges(msg, callback) {
-                var model = findModelFromProp(prop);
-                if (model) {
-                    model.getPubsub().unsubscribe(msg, callback);
-                }
-            }
-
-            function findModelFromProp(prop) {
-                var model;
-                each(context, function(i, mdl){
-                    if (mdl.hasProperty(prop)) {
-                        model = mdl;
-                    }
-                });
-                return model;
+            function unsubscribeToChanges(subscription) {
+                subscription.model.getPubsub().unsubscribe(subscription.msg, subscription.callback);
             }
 
             function unsubscribeItem(itemSubscriptions) {
                 each(itemSubscriptions, function(i, subscription) {
                     if (getTypeOf(subscription) === 'object') {
-                        unsubscribeToChanges(subscription.msg, subscription.callback);
+                        unsubscribeToChanges(subscription);
                     } else {
                         unsubscribeItem(subscription);
                     }
@@ -2221,13 +2201,13 @@
                         var loopItems          = []; // For saving objects to these elements
                         var itemsSubscriptions = []; // For saving subscriptions taken for each elements rendering
 
-                        initAndHandleChanges(prop, function(items){
+                        initAndHandleChanges(prop, function (items) {
 
                             // If no items, just remove all.
                             if (items.length === 0) {
-                                each(loopElements, function(i, child){
+                                each(loopElements, function (i, child) {
                                     // Handle effects if there are
-                                    stage.handleLeaving(child, function(){
+                                    stage.handleLeaving(child, function () {
                                         child.parentNode.removeChild(child);
                                     });
                                 });
@@ -2240,14 +2220,14 @@
 
                             // Remove items no longer needed
                             var lastToLeave;
-                            eachReverse(loopItems, function(i, item){
+                            eachReverse(loopItems, function (i, item) {
                                 if (items.indexOf(item) === -1) {
                                     var child = loopElements[i];
                                     if (!lastToLeave) {
                                         lastToLeave = child;
                                     } else {
-                                        (function(lastToLeave){
-                                            stage.handleLeaving(lastToLeave, function(){
+                                        (function (lastToLeave) {
+                                            stage.handleLeaving(lastToLeave, function () {
                                                 lastToLeave.parentNode.removeChild(lastToLeave);
                                             });
 
@@ -2256,8 +2236,8 @@
                                     }
 
                                     unsubscribeItem(itemsSubscriptions[i]);
-                                    loopElements.splice(i);
-                                    loopItems.splice(i);
+                                    loopElements.splice(i, 1);
+                                    loopItems.splice(i, 1);
                                 }
                             });
 
@@ -2278,7 +2258,7 @@
                                         var itemSubscriptions = [];
                                         itemsSubscriptions.push(itemSubscriptions);
 
-                                        var child = bindModel(element.cloneNode(true), references, itemSubscriptions);
+                                        var child = bindContext(element.cloneNode(true), references, itemSubscriptions);
                                         from[insertMethod](child);
                                         // Handle effects if there are
                                         stage.handleEntering(child);
@@ -2295,28 +2275,26 @@
 
                     if (attr = element.getAttribute('data-bind')) {
 
-                        var tag = element.tagName.toLowerCase();
-                        var prop = replaceReferences(attr);
+                        var tag   = element.tagName.toLowerCase();
+                        var prop  = replaceReferences(attr);
                         var model = findModelFromProp(prop);
 
                         // Bind inputs to publish changes
                         if (tag === 'input' || tag === 'textarea' || tag === 'select') {
 
+                            var msg = getMsgFromProp(prop);
+
                             // If it's a select input, a checkbox, a button or a file input, we listen to "change" event
                             if (tag === 'select' || (tag === 'input' && (element.type === 'radio' || element.type === 'checkbox'))) {
                                 events.addListener('change', element, function(e) {
                                     var target = e.target || e.srcElement;
-                                    model.getPubsub().publish(prop + ':change', null, target.value);
+                                    model.getPubsub().publish(msg, null, target.value);
                                 });
                             // If it's another input, we listen to "keyup" and "keypress"
                             } else {
-                                events.addListener('keyup', element, function(e) {
+                                events.addListener('keyup, keypress', element, function(e) {
                                     var target = e.target || e.srcElement;
-                                    model.getPubsub().publish(prop + ':change', null, target.value);
-                                });
-                                events.addListener('keypress', element, function(e) {
-                                    var target = e.target || e.srcElement;
-                                    model.getPubsub().publish(prop + ':change', null, target.value);
+                                    model.getPubsub().publish(msg, null, target.value);
                                 });
                             }
                         }
@@ -2449,7 +2427,7 @@
             // Recursive binding
             if (element.childNodes && element.childNodes.length > 0) {
                 each(element.childNodes, function(i, child){
-                    bindModel(child, references, subscriptions);
+                    bindContext(child, references, subscriptions);
                 });
             }
 
@@ -2565,7 +2543,7 @@
                         success: function(data) {
                             // Build a template with the response
                             template = createTemplate(data);
-                            bindModel(template);
+                            bindContext(template);
                             // Re-call render to display it
                             that.render(preTransition, postTransition);
                         },
@@ -2725,9 +2703,9 @@
         this.addListener = function(evt, el, fn) {
             each(extractEvents(evt), function(i, e){
                 if (el.addEventListener) {
-                    el.addEventListener(evt, fn, false);
+                    el.addEventListener(e, fn, false);
                 } else if (el.attachEvent) {
-                    el.attachEvent("on" + evt, function() {
+                    el.attachEvent("on" + e, function() {
                         return (fn.call(window.event.srcElement, window.event));
                     });
                 } else {
@@ -3195,30 +3173,28 @@
      * Model handler service.
      * Save and return models.
      */
+    var modelStorage = {};
     var models = new function() {
-
-        // Models storage
-        var storage = {};
 
         // Add a model
         this.add = function(name, model) {
-            if (storage[name]) {
+            if (modelStorage[name]) {
                 throw 'Model with name "'+ name +'" is already registered.';
             } else if (getTypeOf(model) !== 'object') {
                 throw 'Model must be an JSON.';
             }
 
-            storage[name] = new Model(model);
+            modelStorage[name] = new Model(model);
 
-            return storage[name];
+            return modelStorage[name];
         }
 
         // Get a model
         this.get = function(name) {
-            if (!storage[name]) {
+            if (!modelStorage[name]) {
                 throw 'Model with name "'+ name +'" is not registered.';
             }
-            return storage[name];
+            return modelStorage[name];
         }
     };
 
