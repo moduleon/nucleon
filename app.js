@@ -43,7 +43,7 @@
 
     'use strict';
 
-    var version = '2.0';
+    var version = '1.1.2';
     var authors = ['Kevin Marcachi'];
 
     // ==================================
@@ -989,6 +989,25 @@
             return escaped;
         }
 
+        /**
+         * Escape text in <code> tags
+         */
+        function escapeCodesTag(str) {
+            var ALL_TAGS_PATTERN = /<code[ a-z\"\'\-\_\=|]*>(?:(?!<code).|[\r\n])*<\/code>/gi;
+            var codes = str.match(ALL_TAGS_PATTERN);
+            if (codes) {
+                var INNER_TAG_PATTERN  = /<code[ a-z\"\'\-\_\=|]*>((?:(?!<code).|[\r\n])*)<\/code>/i;
+                each(codes, function(key, code) {
+                    var inner = code.match(INNER_TAG_PATTERN)[1];
+                    var escaped = code.replace(inner, inner.replace(/\</g, '&lt;').replace(/\>/g,'&gt;').replace(/\"/g,'&quot;'));
+                    str = str.replace(code, escaped);
+                });
+            }
+
+            return str;
+        }
+
+        string = escapeCodesTag(string);
         var COMMENTS = /<!--[^>]*-->/g;
         string = string.replace(COMMENTS, '');
         string = string.trim();
