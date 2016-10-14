@@ -1096,7 +1096,7 @@
             headers  = params['headers'] || {},
             format   = getFormat(params['format']),
             cors     = params['cors']  || false,
-            async    = params['async'] || true,
+            async    = params['async'] === false ? params['async'] : true,
             store    = params['store'] || false,
             // Retrieving callbacks
             success  = params['success'] || function() {},
@@ -1139,6 +1139,20 @@
             // Include those given in arguments
             for (var key in headers) {
                 request.setRequestHeader(key, headers[key]);
+            }
+        }
+
+        if (async === false) {
+            request.send(null);
+            if (request.status >= 200 && request.status < 400) {
+                var response = handleFormat(format, request.responseText);
+                return success ? success(response, 200) : response;
+            } else {
+                if (error) {
+                    return error(handleFormat(format, request.responseText), request.status);
+                } else {
+                    throw 'Server returned an error.';
+                }
             }
         }
 
@@ -2555,6 +2569,7 @@
                         method: 'GET',
                         url: templateUrl,
                         data: { t_ref: new Date().getTime() },
+                        async: false,
                         success: function(data) {
                             // Build a template with the response
                             template = createTemplate(data);
@@ -2563,7 +2578,7 @@
                             that.render(preTransition, postTransition);
                         },
                         error: function() {
-                            console.log('Template ' + templateUrl + ' could not be loaded.');
+                            throw 'Template ' + templateUrl + ' could not be loaded.';
                         }
                     });
 
