@@ -43,7 +43,7 @@
 
     'use strict';
 
-    var version = '1.1.2';
+    var version = '1.1.3';
     var authors = ['Kevin Marcachi'];
 
     // ==================================
@@ -2202,6 +2202,11 @@
 
                     var attr;
 
+                    if (attr = element.getAttribute('data-no-bind')) {
+                        element.removeAttribute('data-no-bind');
+                        return;
+                    }
+
                     if (attr = element.getAttribute('data-loop')) {
 
                         var LOOP_REF    = / in .*/g;
@@ -2524,17 +2529,23 @@
                         stage.handleLeaving(root.firstChild, function(){
                             root.html(template.show());
                             if (preTransition) {
-                                preTransition();
+                                setTimeout(function () {
+                                    preTransition();
+                                }, 0);
                             }
                             stage.handleEntering(template, postTransition);
                         });
 
                     } else {
                         if (preTransition){
-                            preTransition();
+                            setTimeout(function () {
+                                preTransition();
+                            }, 0);
                         }
                         if (postTransition) {
-                            postTransition();
+                            setTimeout(function () {
+                                postTransition();
+                            }, 0);
                         }
                     }
                 } else {
