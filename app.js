@@ -2322,7 +2322,14 @@
                             if (tag === 'select' || (tag === 'input' && (element.type === 'radio' || element.type === 'checkbox'))) {
                                 events.addListener('change', element, function(e) {
                                     var target = e.target || e.srcElement;
-                                    model.getPubsub().publish(msg, null, target.value);
+                                    var value = target.value;
+                                    // If element is a checkbox and has no value assigned
+                                    // By default it will be "on", but we will send true or false instead
+                                    // Depending if it's checked or not
+                                    if (target.type === 'checkbox' && value === 'on') {
+                                        value = target.checked ? true : false;
+                                    }
+                                    model.getPubsub().publish(msg, null, value);
                                 });
                             // If it's another input, we listen to "keyup" and "keypress"
                             } else {
@@ -2336,9 +2343,13 @@
                         initAndHandleChanges(prop, function(value){
                             // If element is an user input
                             if (tag === 'input' || tag === 'textarea' || tag === 'select') {
-                                // If it's a checkbox or a radio, put on checked attr if its value is identical to the one retrieved
+                                // If it's a checkbox or a radio, turn on checked attr if its value is identical to the one retrieved
                                 if (element.type === 'radio' || element.type === 'checkbox') {
-                                    element.checked = element.value === value ? 'checked' : '';
+                                    if (value === true || value === element.value) {
+                                        element.checked = 'checked';
+                                    } else {
+                                        element.checked = '';
+                                    }
                                 // For others input, just replace the value
                                 } else {
                                     element.value = value;
