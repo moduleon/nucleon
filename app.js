@@ -2143,9 +2143,14 @@
                         if (reference === prop) {
                             prop = realProp;
                             return false;
-                        } else if (prop.indexOf(reference+'.') === 0) {
-                            prop = prop.replace(reference+'.', realProp+'.');
-                            return false;
+                        } else if (prop.indexOf(reference) !== -1) {
+                            prop = prop
+                                .replace(reference +' ', realProp +' ')
+                                .replace(reference +'.', realProp +'.')
+                                .replace(reference +')', realProp +')')
+                                .replace(reference +'_', realProp +'_')
+                            ;
+                            return false
                         }
                     });
                 }
