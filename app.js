@@ -43,7 +43,7 @@
 
     'use strict';
 
-    var version = '1.1.3';
+    var version = '1.1.4';
     var authors = ['Kevin Marcachi'];
 
     // ==================================
@@ -350,7 +350,7 @@
             return array;
         }
 
-        var query = selector.indexOf('#') !== -1 ? 'querySelector' : 'querySelectorAll';
+        var query = selector.indexOf('#') !== -1 && selector.indexOf(' ') === -1 ? 'querySelector' : 'querySelectorAll';
         var result = [];
 
         el = (el && typeof el[query] !== 'undefined') ? el : document.documentElement;
