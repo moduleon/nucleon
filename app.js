@@ -2254,55 +2254,57 @@
                                 return;
                             }
 
-                            // Remove items no longer needed
-                            var lastToLeave;
+                            // Define where array comes to change.
+                            var index = 0;
+                            each(loopItems, function (i, loopItem) {
+                                if (items.indexOf(loopItem) === -1) {
+                                    index = i;
+                                    return false;
+                                }
+                            });
+
+                            // From the end, remove all items below the change
+                            var temporaryRemoved = [];
                             eachReverse(loopItems, function (i, item) {
-                                if (items.indexOf(item) === -1) {
-                                    var child = loopElements[i];
-                                    if (!lastToLeave) {
-                                        lastToLeave = child;
+                                if (i >= index) {
+                                    if (items.indexOf(item) === -1){
+                                        var itemElement = loopElements[i]
+                                        stage.handleLeaving(itemElement, function () {
+                                            itemElement.parentNode.removeChild(itemElement);
+                                        });
                                     } else {
-                                        (function (lastToLeave) {
-                                            stage.handleLeaving(lastToLeave, function () {
-                                                lastToLeave.parentNode.removeChild(lastToLeave);
-                                            });
-
-                                        }(lastToLeave));
-                                        lastToLeave = child;
+                                        loopElements[i].parentNode.removeChild(loopElements[i]);
+                                        temporaryRemoved.push(loopItems[i]);
                                     }
-
                                     unsubscribeItem(itemsSubscriptions[i]);
                                     loopElements.splice(i, 1);
                                     loopItems.splice(i, 1);
                                 }
                             });
 
-                            // After playing removal of the last one, if there is
-                            stage.handleLeaving(lastToLeave, function(){
-                                if (lastToLeave) {
-                                    lastToLeave.parentNode.removeChild(lastToLeave);
-                                }
-                                // Insert elements not rendered yet
-                                loopMethod(items, function(i, item){
-                                    if (loopItems.indexOf(item) === -1) {
-                                        // Reference is an object. We clone before processing to avoid collisions.
-                                        if (references[output]) {
-                                            references = JSON.parse(JSON.stringify(references));
-                                        }
-                                        references[output] = prop +'.'+ i;
-
-                                        var itemSubscriptions = [];
-                                        itemsSubscriptions.push(itemSubscriptions);
-
-                                        var child = bindContext(element.cloneNode(true), references, itemSubscriptions);
-                                        from[insertMethod](child);
-                                        // Handle effects if there are
-                                        stage.handleEntering(child);
-
-                                        loopElements.push(child);
-                                        loopItems.push(item);
+                            // Then add all item missing
+                            loopMethod(items, function(i, item){
+                                if (loopItems.indexOf(item) === -1) {
+                                    // Reference is an object. We clone before processing to avoid collisions.
+                                    if (references[output]) {
+                                        references = JSON.parse(JSON.stringify(references));
                                     }
-                                });
+                                    references[output] = prop +'.'+ i;
+
+                                    var itemSubscriptions = [];
+                                    itemsSubscriptions.push(itemSubscriptions);
+
+                                    var child = bindContext(element.cloneNode(true), references, itemSubscriptions);
+                                    from[insertMethod](child);
+
+                                    // Handle effects if there are, and item is new
+                                    if (temporaryRemoved.indexOf(item) === -1) {
+                                        stage.handleEntering(child);
+                                    }
+
+                                    loopElements.push(child);
+                                    loopItems.push(item);
+                                }
                             });
                         });
 
