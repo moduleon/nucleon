@@ -2143,14 +2143,11 @@
                         if (reference === prop) {
                             prop = realProp;
                             return false;
-                        } else if (prop.indexOf(reference) !== -1) {
-                            prop = prop
-                                .replace(reference +' ', realProp +' ')
-                                .replace(reference +'.', realProp +'.')
-                                .replace(reference +')', realProp +')')
-                                .replace(reference +'_', realProp +'_')
-                            ;
-                            return false
+                        } else {
+                            var pattern = '([\.\(|])*('+ reference +')([\.\)|])';
+                            prop = prop.replace(new RegExp(pattern, 'g'), function(match,$1,$2,$3){
+                                return ($1 ? $1 : '') + realProp + ($3 ? $3 : '');
+                            });
                         }
                     });
                 }
