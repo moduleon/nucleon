@@ -2255,7 +2255,7 @@
                             }
 
                             // Define where array comes to change.
-                            var index = 0;
+                            var index = loopItems.length;
                             each(loopItems, function (i, loopItem) {
                                 if (items.indexOf(loopItem) === -1) {
                                     index = i;
@@ -2324,6 +2324,8 @@
 
                             // If it's a select input, a checkbox, a button or a file input, we listen to "change" event
                             if (tag === 'select' || (tag === 'input' && (element.type === 'radio' || element.type === 'checkbox'))) {
+                                // Get function to run on click on the element, if there is
+                                var clickEvent = element.getAttribute('data-click');
                                 events.addListener('change', element, function(e) {
                                     var target = e.target || e.srcElement;
                                     var value = target.value;
@@ -2333,14 +2335,69 @@
                                     if (target.type === 'checkbox' && value === 'on') {
                                         value = target.checked ? true : false;
                                     }
-                                    model.getPubsub().publish(msg, null, value);
+                                    var actualValue = value;
+                                    // If there is a function to run on click on the element
+                                    // Run it, and update actual value of target element
+                                    if (clickEvent) {
+                                        getValueOf(clickEvent);
+                                        actualValue = target.value;
+                                        if (target.type === 'checkbox' && value === 'on') {
+                                            actualValue = target.checked ? true : false;
+                                        }
+                                    }
+                                    // Publish change if needed
+                                    // Which is not the case if actual value is not the same as before
+                                    // Because it means that an update was already published
+                                    if (value === actualValue) {
+                                        model.getPubsub().publish(msg, null, value);
+                                    }
                                 });
-                            // If it's another input, we listen to "keyup" and "keypress"
+                                if (clickEvent) {
+                                    element.removeAttribute('data-click');
+                                }
+                            // If it's another input, we listen to input change a different way
                             } else {
-                                events.addListener('keyup, keypress', element, function(e) {
-                                    var target = e.target || e.srcElement;
-                                    model.getPubsub().publish(msg, null, target.value);
-                                });
+                                var enterEvent = element.getAttribute('data-enter');
+                                (function (enterEvent) {
+                                    // New way (IE9+)
+                                    if ("oninput" in element) {
+                                        // Listen to key press on enter to run a function if provided
+                                        if (enterEvent) {
+                                            events.addListener('keypress', element, function (e) {
+                                                if (e.which === 13) {
+                                                    e.preventDefault();
+                                                    var target = e.target || e.srcElement;
+                                                    if (target.value) {
+                                                        target.value = target.value + ' ';
+                                                        model.getPubsub().publish(msg, null, target.value);
+                                                    }
+                                                    getValueOf(enterEvent);
+                                                }
+                                            });
+                                        }
+                                        // Keyup, keydown, keypress, paste ...
+                                        events.addListener('input', element, function (e) {
+                                            var target = e.target || e.srcElement;
+                                            model.getPubsub().publish(msg, null, target.value);
+                                        });
+                                    // Old fashion way (IE8-)
+                                    } else {
+                                        events.addListener('keyup, keypress', element, function (e) {
+                                            var target = e.target || e.srcElement;
+                                            // Listen to key press on enter to run a function if provided
+                                            if (enterEvent && e.which === 13) {
+                                                e.preventDefault();
+                                                if (target.value) {
+                                                    target.value = target.value + ' ';
+                                                    model.getPubsub().publish(msg, null, target.value);
+                                                }
+                                                getValueOf(enterEvent);
+                                                return;
+                                            }
+                                            model.getPubsub().publish(msg, null, target.value);
+                                        });
+                                    }
+                                }(enterEvent));
                             }
                         }
 
@@ -2387,7 +2444,6 @@
                     if (attr = element.getAttribute('data-click')) {
                         (function(attr) {
                             events.addListener('click', element, function(e) {
-                                e.preventDefault();
                                 getValueOf(attr);
                             });
                         }(attr));
@@ -2397,7 +2453,6 @@
                     if (attr = element.getAttribute('data-submit')) {
                         (function(attr) {
                             events.addListener('submit', element, function(e) {
-                                e.preventDefault();
                                 getValueOf(attr);
                             });
                         }(attr));
