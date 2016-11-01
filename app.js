@@ -2450,6 +2450,15 @@
                         element.removeAttribute('data-click');
                     }
 
+                    if (attr = element.getAttribute('data-double-click')) {
+                        (function(attr) {
+                            events.addListener('dblclick', element, function(e) {
+                                getValueOf(attr);
+                            });
+                        }(attr));
+                        element.removeAttribute('data-double-click');
+                    }
+
                     if (attr = element.getAttribute('data-submit')) {
                         (function(attr) {
                             events.addListener('submit', element, function(e) {
