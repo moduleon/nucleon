@@ -1765,9 +1765,10 @@
      */
     var Model = function(model) {
 
-        var publish = true;
-        var pubsub  = new PubSub();
-        var that    = this;
+        var publish       = true;
+        var pubsub        = new PubSub();
+        var subscriptions = [];
+        var that          = this;
 
         // Start by building inner properties
         hydrate(this, model, true);
@@ -1799,9 +1800,13 @@
                                 subscribeToOuterChanges(value, handler, actualPath);
                                 break;
                             default:
-                                pubsub.subscribe(actualPath+':change', function(msg, oldValue, newValue){
-                                    handler(actualPath, oldValue, newValue);
-                                });
+                                var message = actualPath + ':change';
+                                if (subscriptions.indexOf(message) === -1) {
+                                    pubsub.subscribe(message, function(msg, oldValue, newValue){
+                                        handler(actualPath, oldValue, newValue);
+                                    });
+                                    subscriptions.push(message);
+                                }
                         }
                     }(value, actualPath, handler));
                 }
