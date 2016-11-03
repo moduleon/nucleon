@@ -1,6 +1,6 @@
 {
   "name": "nucleon-js",
-  "version": "1.2",
+  "version": "1.2.0",
   "description": "A lightweight, easy-to-use javascript framework",
   "main": "app.js",
   "scripts": {
