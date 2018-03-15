@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- Main container -->
+    <div id="main" class="container"></div>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to use callbacks on a view.
+        //
+
+        // Build a simple view containing all available callbacks
+        var view = app.views.add('profile', {
+            root: '#main',
+            template: '<div>{{ message }}</div>',
+            context: {
+                message: 'Hello world!',
+            },
+            onRender: function () {
+                console.log('[onRender]   I am called each time render() is called.');
+            },
+            onRendered: function () {
+                console.log('[onRendered] I am called after each render() call.');
+            },
+            onUpdate: function () {
+                console.log('[onUpdate]   I am called before each update.');
+            },
+            onUpdated: function () {
+                console.log('[onUpdated]  I am called after each update.');
+            },
+            onRevoke: function () {
+                console.log('[onRevoke]   I am called each time revove() is called.');
+            },
+            onRevoked: function () {
+                console.log('[onRevoked]  I am called after each revoke() call.');
+            }
+        });
+
+        // Let's now make some actions triggering those callbacks
+
+        console.log('===================');
+        console.log('Render() is called.');
+        console.log('===================');
+        view.render(); // Will launch onRender
+        // Then onRendered
+
+        console.log('====================');
+        console.log('Context is modified.');
+        console.log('====================');
+        view._context.message = 'Foo bar'; // Will launch onUpdate
+        // Then onUpdated
+
+        console.log('===================');
+        console.log('Revoke() is called.');
+        console.log('===================');
+        view.revoke(); // Will launch onRevoke
+        // Then onRevoked
+
+        console.log('==========================================');
+        console.log('Context is modified while view is revoked.');
+        console.log('==========================================');
+        view._context.message = 'YOLO'; // Nothing called, because view is not rendered.
+
+        console.log('===================');
+        console.log('Render() is called.');
+        console.log('===================');
+        view.render(); // Will launch onRender
+        // Then onRendered and onUpdate (changes made when view was revoked now apply)
+    </script>
+</body>
+</html>

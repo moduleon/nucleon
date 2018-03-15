@@ -1,24 +1,33 @@
 {
   "name": "nucleon-js",
-  "version": "1.2.0",
-  "description": "A lightweight, easy-to-use javascript framework",
-  "main": "app.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/moduleon/nucleon.git"
-  },
+  "version": "2.0.0",
+  "description": "The simplest javascript framework for frontend development",
+  "main": "./src/main.js",
+  "author": "Kévin Marcachi <kevin.marcachi@gmail.com>",
+  "license": "MIT",
   "keywords": [
     "javascript",
     "framework",
-    "MVC"
+    "frontend",
+    "simple",
+    "web",
+    "MVC",
+    "vanilla"
   ],
-  "author": "Kévin Marcachi",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/moduleon/nucleon/issues"
+  "scripts": {
+    "dev-server": "webpack-dev-server",
+    "dev-mode": "webpack --progress --watch",
+    "build": "eslint ./src && webpack",
+    "test": "mocha --recursive --async-only"
   },
-  "homepage": "https://github.com/moduleon/nucleon#readme"
+  "devDependencies": {
+    "eslint": "^3.11.1",
+    "eslint-loader": "^1.6.1",
+    "jsdom": "11.3.0",
+    "jsdom-global": "3.0.2",
+    "mocha": "^3.2.0",
+    "webpack": "3.4.1",
+    "webpack-dev-server": "2.6.1",
+    "xmlhttprequest": "^1.8.0"
+  }
 }

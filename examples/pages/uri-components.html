@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pages example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- Main container -->
+    <section id="main" class="container"></section>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This more advance example shows how to register a page
+        // Having expected uri components, and how to use generateUrl() in template
+        // For generating urls.
+        //
+
+        // Setting our collection of articles, that will be used by our pages.
+        var articles = [{
+            title: 'My super article',
+            description: 'This is a pure description',
+            slug: 'my-super-article'
+        }];
+
+        app.pages
+
+            // Building a page for our blog, rendering multiple article thumbs.
+            .add('Blog', {
+                route: '/pages/uri-components.html', // Make it match the current url, for page to be run right away
+                view: { // Defining an inner view, without registering it in app.views
+                    root: '#main',
+                    template: (
+                        '<h1>My blog</h1>'+
+                        '<ul>'+
+                            '<li data-for="article in articles">'+
+                                // We use action route name for generating article url
+                                '<a href="{{ generateUrl("show_article", { "slug": article.slug }) }}">'+
+                                    '{{ article.title }}'+
+                                '</a>'+
+                            '</li>'+
+                        '</ul>'
+                    ),
+                    // Context is simple. Our blog has a collection of articles,
+                    // That we use in a loop in our template.
+                    context: {
+                        articles: articles
+                    }
+                },
+                fn: function () { // Will be called right away, because url matches the route
+                    // Render inner view
+                    this.renderView();
+                }
+            })
+
+            // Building a page for rendering a single article
+            .add('Article page', {
+                route: {
+                    path: '/blog/{slug}', // Defining url pattern
+                    method: 'GET', // Just for the example, it's the default value
+                    params: {
+                        slug: 'slug' // Will match all slugs ([a-zA-Z0-9_-]+), it's a preconconfigued type.
+                        //
+                        // There are other preconfigured types
+                        // slug: 'word'    // Would match all alphanumeric entries ([a-zA-Z0-9%]+)
+                        // slug: 'number'  // Would match all numbers ([0-9]+)
+                        //
+                        // Or you can write your own regexp if none fits your need
+                        // slug: '[myownregexp]'
+                        name: 'show_article'
+                    }
+                },
+                view: {
+                    root: '#main',
+                    template: (
+                        '<h1>{{ title }}</h1>'+
+                        '<p>{{ description }}</p>'
+                    ),
+                    context: {
+                        title: '',
+                        description: ''
+                    }
+                },
+                fn: function (request) {
+                    // Fetch slug from request
+                    var slug = request.getUriComponents()['slug']; // Ask for slug, which is defined in route pattern
+                    // Find an article matching this slug
+                    for (var i = 0; i < articles.length; i++) {
+                        if (slug === articles[i].slug) {
+                            // Fetch inner view context
+                            var context = this.getViewContext();
+                            // Populate article data in it.
+                            context.title = articles[i].title;
+                            context.description = articles[i].description;
+                        }
+                    }
+                    // Then, we render the inner view
+                    this.renderView();
+                }
+            })
+        ;
+
+        //
+        // Now when clicking on an article link from our blog page,
+        // We should see the article view appear.
+        //
+    </script>
+</body>
+</html>

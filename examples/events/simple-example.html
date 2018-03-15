@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Events example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="input-group">
+            <input class="form-control" id="my_input" type="text" />
+            <span class="input-group-btn">
+                <input class="watched btn btn-primary" type="submit" value="Enter" />
+            </span>
+        </div>
+    </div>
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to use dom events service.
+        //
+
+        // Listening to click event for all elements having class "watched"
+        // Will watch even elements inserted after listener registration.
+        var callback = function (e) {
+            console.log(e);
+        };
+        app.events.on('click', '.watched', callback);
+        // Triggering manually the event
+        app.events.trigger('click', '.watched');
+        // Removing the listener
+        app.events.off('click', '.watched', callback);
+
+        // Listening a specific input, for keyup and keydown event
+        var input = document.getElementById('my_input');
+        app.events.on('keyup, keydown', input, callback);
+        // Also available
+        // app.events.trigger('keyup', input);
+        // app.events.off('keyup, keydown', callback);
+    </script>
+</body>
+</html>

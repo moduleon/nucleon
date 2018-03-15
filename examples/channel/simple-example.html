@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Channel example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to use app channel.
+        // It's a simple event system.
+        //
+
+        // Registering an event listener, and a callback to run if event is triggered.
+        var callback = function (value) {
+            console.log(value);
+        };
+        app.channel.on('my.custom.event', callback);
+
+        // Triggering the event.
+        app.channel.trigger('my.custom.event', 42);
+
+        // Removing the listener
+        app.channel.off('my.custom.event', callback);
+        app.channel.trigger('my.custom.event', 42); // No longer called. Work only if callback is named function.
+    </script>
+</body>
+</html>

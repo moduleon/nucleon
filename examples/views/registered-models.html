@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- Main container -->
+    <div id="main" class="container"></div>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example show how to use a registered model in a view.
+        //
+
+        // Rather than defining user directly in a view context,
+        // We define it in app.models. That way, it can be easily used by multple views.
+        var user = app.models.add('user', {
+            firstname: 'Kévin',
+            lastname: 'Marcachi',
+            friends: [
+                { firstname: 'Brandon', lastname: 'Marcachi' }
+            ],
+            sayMyName: function () {
+                return 'Hello i am '+this.firstname+' '+this.lastname;
+            },
+        });
+
+        app.views.add('profile', {
+            root: '#main',
+            template: (
+                '<h1>User profile</h1>'+
+                '<h2>{{ user.firstname }} ({{ user.sayMyName() }})</h2>'+
+                '<div data-if="user.friends.length > 0">'+
+                    '<h3>His friends</h3>'+
+                    '<ul>'+
+                        '<li data-for="friend in user.friends">{{ friend.firstname+" "+friend.lastname }}</li>'+
+                    '</ul>'+
+                '</div>'
+            ),
+            context: {
+                user: user // Use a registered model. Can be shared by multiple views
+            }
+        }).render();
+    </script>
+</body>
+</html>

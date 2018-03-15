@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pages example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <!-- Main container -->
+    <section id="main" class="container">
+        <a href="/protected-action">Go see something I not allowed to yet</a>
+    </section>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to redirect a request from an action to another
+        //
+
+        // Build a view for login page
+        app.views.add('login', {
+            root: '#main',
+            template: (
+                '<h1>Connect</h1>'+
+                '<form action="{{ generateUrl("Login page") }}" method="POST">'+
+                    '<input type="text" name="username" placeholder="Username" class="form-control" />'+
+                    '<input type="password" name="password" placeholder="Password" class="form-control" />'+
+                    '<input type="submit" value="Submit" class="btn btn-primary" />'+
+                '</form>'
+            )
+        });
+
+        // Build a login page
+        app.pages.add('Login page', {
+            route: {
+                path: '/login',
+                method: 'GET|POST'
+            },
+            fn: function (request) {
+                if ('POST' === request.getMethod()) {
+                    // We would usually treat here user input, log user in, redirect him...
+                }
+                // Render login page
+                app.views.render('login');
+            }
+        });
+
+        // Build a protected page,
+        // That a user can not reach if he's not logged in.
+        app.pages.add('Protected page', {
+            route: '/protected-action',
+            fn: function () {
+                console.log('here');
+                // For the example, we don't check if user is logged in.
+                // We redirect him right away to the login page.
+                var loginUrl = app.router.generateUrl('Login page');
+                app.redirect(loginUrl);
+            }
+        });
+
+        //
+        // Now if you click on the link, protectedAction will redirect you to the login action.
+        //
+    </script>
+</body>
+</html>

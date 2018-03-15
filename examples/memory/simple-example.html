@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Memory example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to use browser memory manager.
+        //
+
+        // Set a simple property value
+        app.memory.set('property', 42);
+        // Fetch it
+        console.log(app.memory.get('property'));
+        // Remove it
+        app.memory.remove('property');
+        console.log(app.memory.get('property')); // undefined
+
+        // Set an empty object
+        app.memory.set('object', {});
+        // Set a property in it using dot path
+        app.memory.set('object.property', 42);
+        console.log(app.memory.get('object.property')); // 21
+
+        // Fetch all values stored in memory
+        console.log(app.memory.all()); // { object: { property: 42 } }
+
+        // Flush all
+        app.memory.clear();
+        console.log(app.memory.all()); // {}
+    </script>
+</body>
+</html>

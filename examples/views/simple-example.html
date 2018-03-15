@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- Main container -->
+    <div id="main"></div>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to build a view, containing a reference
+        // To a variable in its context.
+        //
+
+        // Building a view
+        var view = app.views.add('simple_view', {
+            root: '#main',                       // Css selector of the container
+            template: '<div>{{ message }}<div>', // Template handled by the view
+            context: {                           // Data available in template
+                message: 'Hello!'
+            }
+        });
+
+        // Render it
+        view.render();
+        // Or if it was not stored in a var,
+        // We could call app.views directly
+        // app.views.render('simple_view');
+
+        // Hide it
+        //
+        // view.revoke();
+        // app.views.revoke('simple_view');
+
+        // For the example, let's now change variable value after 1 sec.
+        // It will automatically update the view.
+        setTimeout(function(){
+            view._context.message = 'Goodbye...'
+        }, 1000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pages example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-inverse">
+        <div class="container">
+            <div class="navbar-header">
+                <a class="navbar-brand" href="/home">Nucleon v2</a>
+            </div>
+            <div id="navbar" class="collapse navbar-collapse">
+                <ul class="nav navbar-nav">
+                    <li class="active"><a href="/home">Home</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main container -->
+    <section id="main" class="container"></section>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to build a page.
+        // For understanding, we use the simplest use case.
+        //
+
+        // Build a view. For this example, this will be a homepage view.
+        app.views.add('home', {
+            root: '#main',
+            template: (
+                '<div class="row">'+
+                    '<h1>Home page</h1>'+
+                    '<p>Welcome to the home page!</p>'+
+                '</div>'
+            )
+        });
+
+        // Registering a new page
+        app.pages.add('home', {
+            route: '/home',
+            fn: function (request) {
+                // Rendering home view
+                app.views.render('home');
+            }
+        });
+
+        //
+        // Now, if you click on the "home" menu button,
+        // You will see the view appear.
+        //
+    </script>
+</body>
+</html>

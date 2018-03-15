@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <div class="container">
+        <div id="empty_container"></div>
+        <div id="furfilled_container">
+            {{ message }}
+        </div>
+        <div id="another_empty_container"></div>
+    </div>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to use templates in views by several ways
+        //
+
+        // First method, define a template in template attribute
+        // It will be injected in the root element when view will be rendered
+        app.views.add('inner_view_template', {
+            root: '#empty_container',
+            template: '<div>{{ message }}<div>',
+            context: {
+                message: 'Hello!'
+            }
+        }).render();
+
+        // Second method, define the template in root element itself
+        // All context references will be replaced when view will be rendered
+        app.views.add('outer_view_template', {
+            root: '#furfilled_container',
+            context: {
+                message: 'Hello!'
+            }
+        }).render();
+
+        // Third method, define an url where template is stored
+        // It will be downloaded once when view will be rendered
+        app.views.add('remote_view_template', {
+            root: '#another_empty_container',
+            templateUrl: '/views/templates/message-show.html',
+            context: {
+                message: 'Hello!'
+            }
+        }).render();
+    </script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Http client example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to use the http client.
+        //
+
+        app.http
+            .get(
+                // Url
+                'https://moduleon.com',
+                // Data (optional) - Turn into GET parameters in a GET call
+                {
+                    t: new Date() // Let's a "t" parameter in url containing a timestamp.
+                },
+                // Other config elements (optional)
+                {
+                    async: true,  // Asynchronous call, default value.
+                    cache: false, // Store response in cache for using it in future calls. Available for GET calls only.
+                    cors: true,   // Cross origin call, default false.
+                    format: null, // Expected format, "JSON" can be given. Will turn string response into JSON.
+                    headers: {    // Set headers, default 'X-Requested-With': 'XMLHttpRequest'
+                        'Authorization': 'Bearer xxx',
+                    },
+                    progress: function () {}, // On progress callback.
+                    success: function () {},  // On success callback. Used here if call in synchronous.
+                    error: function () {},    // On error callback. Used here if call is synchronous.
+                    timeout: function () {},  // On timeout callback.
+                }
+            )
+            // Pipes - available only is asynchronous call
+            // Success callback
+            .success(function (data) {
+                console.log('Success');
+            })
+            // Error callback
+            .error(function (message) {
+                console.log('Error');
+            })
+            // Always called
+            .always(function () {
+                console.log('Always called');
+            })
+            // Abort request
+            .abort()
+        ;
+
+        // Other call type
+
+        // POST request
+        // app.http.post(url, data, config);
+
+        // PUT request
+        // app.http.put(url, data, config);
+
+        // DELETE request
+        // app.http.delete(url, data, config);
+    </script>
+</body>
+</html>

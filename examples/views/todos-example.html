@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- Main container -->
+    <div id="main" class="container"></div>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example show all features available for a view through a list of todos.
+        //
+
+        // Building our todos view
+        app.views.add('todos', {
+            root: '#main',
+            template: (
+                '<div class="row">'+
+                    '<div class="col-md-6">'+
+                        '<h1>Todos list example</h1>'+
+                        '<div class="form-group">'+
+                            '<div class="input-group">'+
+                                // data-bind | Create a two ways data binding between an input and a context value
+                                '<input data-bind="newTodo" id="todo_input" type="text" class="form-control" placeholder="Write something" />'+
+                                '<span class="input-group-btn">'+
+                                    // data-events | Register dom events callbacks
+                                    '<button data-events="click:addTodo()" class="btn btn-primary">Add</button>'+
+                                '</span>'+
+                            '</div>'+
+                        '</div>'+
+                        // data-if | Insert element if furfilling a condition
+                        '<ul data-if="todos.length > 0" class="list-group">'+
+                            // data-for | Make a loop through a collection
+                            '<li data-for="todo in todos" class="list-group-item">'+
+                                // mustach markers | Showing a value
+                                '{{ todo.name }}'+
+                                '<span data-events="click:removeTodo(todo)" class="badge btn btn-default">Done</span>'+
+                            '</li>'+
+                        '</ul>'+
+                        // data-show | Display element if furfilling a condition (use display:none)
+                        '<div data-show="todos.length == 0">Nothing to do. Go to the beach ?</div>'+
+                    '</div>'+
+                '</div>'
+            ),
+            // Creating view context
+            context: {
+                // View has a collection of todos
+                todos: [
+                    { name: 'Learn javascript' }
+                ],
+                // An empty string value for collecting a new todo value
+                newTodo: '',
+                // A method for adding the new todo
+                addTodo: function () {
+                    if (this.newTodo.trim()) {
+                        this.todos.unshift({ name: this.newTodo });
+                        this.newTodo = '';
+                    }
+                },
+                // A method for removing a todo
+                removeTodo: function (todo) {
+                    var index = this.todos.indexOf(todo);
+                    if (-1 !== index) {
+                        this.todos.splice(index, 1);
+                    }
+                },
+            },
+            // Register a callback
+            onRendered: function () {
+                // When view is rendered, bind enter key press for adding a todo
+                var input = document.getElementById('todo_input');
+                input.addEventListener('keyup', function (e) {
+                    if (13 === e.keyCode) {
+                        app.views.get('todos')._context.addTodo();
+                    }
+                });
+                // And set the focus on the input
+                input.focus();
+            }
+        }).render();
+    </script>
+</body>
+</html>

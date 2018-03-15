@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Models example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- Main container -->
+    <div id="main" class="container"></div>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example shows how to a model in the app.
+        // A model is an object triggering event when its property values come to change.
+        //
+
+        // Build a new model representing an user
+        var userModel = app.models.add('user', {
+            firstname: 'Kévin',
+            lastname: 'Marcachi',
+            friends: [
+                { firstname: 'Brandon', lastname: 'Marcachi' }
+            ]
+        });
+        // You can also retrieve it from anywhere by calling app.models.get('user');
+
+        // For the example, let's listen to any change on firstname attribute
+        userModel.on('change', 'firstname', function (newValue, oldValue) {
+            console.log('Old value: '+oldValue);
+            console.log('New value: '+newValue);
+        });
+        console.log('===================');
+        console.log('Changing name value');
+        console.log('===================');
+        userModel.firstname = 'Mike';
+
+        // Listen to any addition in friends
+        userModel.on('add', 'friends', function (addedValue) {
+            console.log('New item:');
+            console.log(addedValue);
+        });
+        console.log('================');
+        console.log('Adding a friend.');
+        console.log('================');
+        userModel.friends.push({ firstname: 'Lili', lastname: 'Bulle' });
+
+        // Listen to any removal from friends
+        userModel.on('remove', 'friends', function (removedItem) {
+            console.log('Removed item:');
+            console.log(removedItem);
+        });
+        console.log('======================');
+        console.log('Removing added friend.');
+        console.log('======================');
+        userModel.friends.splice(1, 1);
+
+        // Listen to any other changes in friends
+        userModel.on('change', 'friends', function (collection) {
+            console.log('New collection value:');
+            console.log(collection);
+        });
+        console.log('===========================');
+        console.log('Reversing order of friends.');
+        console.log('===========================');
+        userModel.friends.reverse();
+
+        //
+        // A view registers this kind of listeners for changing automatically its template elements.
+        //
+    </script>
+</body>
+</html>

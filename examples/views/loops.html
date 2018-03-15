@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- Main container -->
+    <div id="main" class="container"></div>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+
+        //
+        // This example shows how to use loops.
+        //
+
+        // Building a simple model, representing a user having some strong friends
+        var user = app.models.add('user', {
+            firstname: 'Kévin',
+            lastname: 'Marcachi',
+            friends: [
+                { firstname: 'Steven', lastname: 'Siegal', skills: ['karate', 'gun'] },
+                { firstname: 'Jet', lastname: 'Li', skills: ['kung fu', 'saber'] },
+                { firstname: 'Jacky', lastname: 'Chan', skills: ['ju ji tsu', 'stick'] },
+            ],
+        });
+
+        // Building a view using this model for rendering loops
+        app.views.add('profile', {
+            root: '#main',
+            template: (
+                // Loop on a collection
+                '<ul data-if="user.friends.length > 0">'+
+                    '<li data-for="friend in user.friends">'+
+                        'Name: {{ friend.firstname+" "+friend.lastname }}<br />'+
+                        'Skills: <span data-for="skill in friend.skills">{{ skill }}, </span>'+
+                    '</li>'+
+                '</ul>'+
+                // Loop on a collection (alternative example)
+                '<ul data-if="user.friends.length > 0">'+
+                    // Using array index (like a foreach key => value)
+                    '<li data-for="index, friend in user.friends">'+
+                        '{{ index + 1 }}<br />'+
+                        'Name: {{ friend.firstname+" "+friend.lastname }}<br />'+
+                        'Skills: <span data-for="skill in friend.skills">{{ skill }}, </span>'+
+                    '</li>'+
+                '</ul>'+
+                // Loop on a number
+                '<div><span data-for="i in user.friends.length">{{ i }} </span></div>'+
+                // Loop on an object properties
+                '<ul>'+
+                    '<li data-for="prop, value in user">{{ prop }}: {{ value }}</li>'+
+                '</ul>'
+            ),
+            context: {
+                user: user
+            }
+        }).render(); // Render it right away
+
+    </script>
+</body>
+</html>
