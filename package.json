@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "start": "webpack-dev-server --mode development",
-    "build": "eslint ./src && --mode production",
+    "build": "eslint ./src && webpack --mode production",
     "test": "mocha --recursive --async-only"
   },
   "devDependencies": {
