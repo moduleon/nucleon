@@ -1,6 +1,6 @@
 #
 # For the webserver, we choose to use Nginx (pronounced "en-jay-nix") based
-# on Alpine kernel. It will also be used to proxy requests to Redmine.
+# on Alpine kernel.
 #
 FROM        node:8-alpine
 MAINTAINER  Kevin Marcachi <kevin.marcachi@gmail.com>
