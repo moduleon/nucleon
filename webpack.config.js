@@ -2,6 +2,12 @@ const webpack = require('webpack');
 const path = require('path');
 
 module.exports = {
+    resolve: {
+        extensions: ['.js', '.json'],
+        alias: {
+          '@': path.join(__dirname, 'src')
+        }
+    },
     entry: {
         'nucleon': './src/main.js',
         'nucleon.min': './src/main.js',
@@ -17,9 +23,12 @@ module.exports = {
             path.join(__dirname, "dist"),
             path.join(__dirname, "examples"),
         ],
+        host: '0.0.0.0',
+        port: 80,
+        disableHostCheck: true
     },
     module: {
-        loaders: [
+        rules: [
             {
                 test: /\.js$/,
                 exclude: /node_modules/,
@@ -31,10 +40,6 @@ module.exports = {
         ]
     },
     plugins: [
-        new webpack.optimize.UglifyJsPlugin({
-            include: /\.min\.js$/,
-            minimize: true,
-            comments: false,
-        })
+        new webpack.LoaderOptionsPlugin({ options: {} })
     ]
 };
