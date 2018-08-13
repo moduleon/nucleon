@@ -1,0 +1,16 @@
+#
+# This file is the configuration file for Docker Sync. MacOS users should use
+# this as it speeds up a lot files access in containers.
+#
+version: '2'
+
+syncs:
+  ${COMPOSE_PROJECT_NAME}-data-volume:
+    src: ./
+    sync_strategy: 'unison'
+    sync_userid: '1000'
+    sync_args:
+      - "-ignore='Path .idea'"           # no need to send PHPStorm config to container
+      - "-ignore='Path .git'"            # no need to send Git files to container
+      - "-ignore='Path .docker-sync'"    # no need to send docker-sync files to container
+      - "-ignore='Path docker'"          # no need to sync docker data
