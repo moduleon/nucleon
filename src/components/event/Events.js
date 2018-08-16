@@ -1,5 +1,5 @@
 // Requirements
-var EventService = require('../../../src/components/event/classes/EventService');
+var EventService = require('@/components/event/classes/EventService');
 
 /**
  * Events is an instance of EventService, giving an api for dealing with dom events.

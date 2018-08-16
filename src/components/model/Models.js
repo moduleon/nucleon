@@ -1,5 +1,5 @@
 // Requirements
-var Model = require('../../../src/components/model/classes/Model');
+var Model = require('@/components/model/classes/Model');
 
 /**
  * Models is a container for Model instances.

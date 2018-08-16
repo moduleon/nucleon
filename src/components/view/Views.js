@@ -1,5 +1,5 @@
 // Requirements
-var View = require('../../../src/components/view/classes/View');
+var View = require('@/components/view/classes/View');
 
 /**
  * Views is a container for View instances.

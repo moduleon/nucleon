@@ -1,5 +1,5 @@
 // Requirements
-var DOMManipulator = require('../../../../src/components/dom/DOMManipulator');
+var DOMManipulator = require('@/components/dom/DOMManipulator');
 
 /**
  * Request instance is an object containing all elements of a http request.

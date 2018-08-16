@@ -1,5 +1,5 @@
 // Requirements
-var DOMManipulator = require('../../../../src/components/dom/DOMManipulator');
+var DOMManipulator = require('@/components/dom/DOMManipulator');
 
 /**
  * EventService instances gives an api for dealing with dom events.

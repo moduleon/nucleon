@@ -1,8 +1,8 @@
 // Requirements
-var Route = require('../../../../src/components/routing/classes/Route');
-var router = require('../../../../src/components/routing/Router');
-var history = require('../../../../src/components/browser/History');
-var views = require('../../../../src/components/view/Views');
+var Route = require('@/components/routing/classes/Route');
+var router = require('@/components/routing/Router');
+var history = require('@/components/browser/History');
+var views = require('@/components/view/Views');
 
 /**
  * Page is an object in charge of rendering a view for all requests on a given route.

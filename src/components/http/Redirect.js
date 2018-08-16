@@ -8,7 +8,7 @@
  * @package nucleon-js
  */
 var redirect = function (url, storeInHistory) {
-    var pages = require('../../../src/components/page/Pages');
+    var pages = require('@/components/page/Pages');
     var btn = document.createElement('a');
     btn.href = url;
 

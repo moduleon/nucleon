@@ -1,9 +1,9 @@
 // Requirements
-var client = require('../../../../src/components/http/Client');
-var DOMManipulator = require('../../../../src/components/dom/DOMManipulator');
-var Fusioner = require('../../../../src/components/view/classes/Fusioner');
-var Model = require('../../../../src/components/model/classes/Model');
-var router = require('../../../../src/components/routing/Router');
+var client = require('@/components/http/Client');
+var DOMManipulator = require('@/components/dom/DOMManipulator');
+var Fusioner = require('@/components/view/classes/Fusioner');
+var Model = require('@/components/model/classes/Model');
+var router = require('@/components/routing/Router');
 
 /**
  * View instances give an api for rendering an element based on a given template and context.

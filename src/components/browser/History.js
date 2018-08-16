@@ -1,6 +1,6 @@
 // Requirements
-var innerEvents = require('../../../src/components/event/InnerEvents');
-var redirect = require('../../../src/components/http/Redirect');
+var innerEvents = require('@/components/event/InnerEvents');
+var redirect = require('@/components/http/Redirect');
 
 /**
  * History offers an api for adding url and callbacks in browser history.

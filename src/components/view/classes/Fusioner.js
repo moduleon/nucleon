@@ -1,10 +1,10 @@
 // Requirements
-var accessor = require('../../../../src/components/property/PropertyAccessor');
-var DOMManipulator = require('../../../../src/components/dom/DOMManipulator');
-var events = require('../../../../src/components/event/Events');
-var processor = require('../../../../src/components/processor/ExprEvaluator');
-var Model = require('../../../../src/components/model/classes/Model');
-var Collection = require('../../../../src/components/model/classes/Collection');
+var accessor = require('@/components/property/PropertyAccessor');
+var DOMManipulator = require('@/components/dom/DOMManipulator');
+var events = require('@/components/event/Events');
+var processor = require('@/components/processor/ExprEvaluator');
+var Model = require('@/components/model/classes/Model');
+var Collection = require('@/components/model/classes/Collection');
 
 /**
  * Fusioner instances create a binding between an html element and a context.

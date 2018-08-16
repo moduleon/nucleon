@@ -1,5 +1,5 @@
 // Requirements
-var accessor = require('../../../src/components/property/PropertyAccessor');
+var accessor = require('@/components/property/PropertyAccessor');
 
 /**
  * Memory offers an api for dealing with browser memory.
