@@ -4,6 +4,7 @@ var DOMManipulator = require('@/components/dom/DOMManipulator');
 var Fusioner = require('@/components/view/classes/Fusioner');
 var Model = require('@/components/model/classes/Model');
 var router = require('@/components/routing/Router');
+var view = require('@/components/view/Views');
 
 /**
  * View instances give an api for rendering an element based on a given template and context.
@@ -28,6 +29,7 @@ View.prototype = {
     _template: null,
     _templateUrl: null,
     _context: null,
+    _parent: null,
     // Event callbacks
     _onMounted: null,
     _onRender: null,
@@ -96,9 +98,21 @@ View.prototype = {
     /**
      * Insert view elements in the DOM.
      */
-    render: function () {
+    render: function (callback) {
 
         var self = this;
+
+        // Inheritance
+        if (this._parent) {
+            if (typeof this._parent === 'string') {
+                this._parent = view.get(this._parent);
+            }
+            if (!this._parent.isRendered()) {
+                return this._parent.render(function () {
+                    self.render();
+                });
+            }
+        }
 
         // Template is not loaded
         if (!this._template && this._templateUrl) {
@@ -176,6 +190,10 @@ View.prototype = {
             }
             this._fusioner.applyChanges();
         }
+
+        if (typeof callback === 'function') {
+            callback();
+        }
     },
 
     /**
@@ -212,6 +230,15 @@ View.prototype = {
     getContext: function () {
         return this._context;
     },
+
+    /**
+     * Check if view is rendered.
+     *
+     * @return {Boolean}
+     */
+    isRendered: function () {
+        return this._rendered;
+    }
 };
 
 module.exports = View;
