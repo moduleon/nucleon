@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+docker/bin/down
+if [ -f "docker-sync.yml" ];then
+    docker-sync start
+fi
+docker-compose up "$@"

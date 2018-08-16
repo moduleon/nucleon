@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+user="$@"
+if [ -z $user ]; then
+    user="root"
+fi;
+docker-compose exec -u $user node /bin/sh

@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+    node:
+        build: ./docker/services/node
+        container_name: ${COMPOSE_PROJECT_NAME}-web
+        command: "npm run start"
+        network_mode: bridge
+        environment:
+            - VIRTUAL_HOST=${COMPOSE_PROJECT_NAME}.local
+        ports:
+            - "80"
+        volumes:
+            - ${COMPOSE_PROJECT_NAME}-data-volume:/app
+
+volumes:
+    nucleon-data-volume:
+        external: true
