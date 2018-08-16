@@ -1,6 +1,6 @@
 {
   "name": "nucleon-js",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "The simplest javascript framework for frontend development",
   "main": "./src/main.js",
   "author": "Kévin Marcachi <kevin.marcachi@gmail.com>",
@@ -20,6 +20,7 @@
     "test": "mocha --recursive --async-only"
   },
   "devDependencies": {
+    "babel-minify-webpack-plugin": "^0.3.1",
     "eslint": "^3.11.1",
     "eslint-loader": "^1.6.1",
     "jsdom": "11.3.0",

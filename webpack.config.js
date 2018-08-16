@@ -1,5 +1,6 @@
 const webpack = require('webpack');
 const path = require('path');
+const MinifyPlugin = require("babel-minify-webpack-plugin");
 
 module.exports = {
     resolve: {
@@ -39,7 +40,13 @@ module.exports = {
             }
         ]
     },
+    optimization: {
+        minimize: false
+    },
     plugins: [
-        new webpack.LoaderOptionsPlugin({ options: {} })
+        new webpack.LoaderOptionsPlugin({ options: {} }),
+        new MinifyPlugin({}, {
+            test: /\.min\.js($|\?)/i
+        })
     ]
 };
