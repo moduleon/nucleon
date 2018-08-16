@@ -28,6 +28,7 @@ var Fusioner = function (config) {
     this._shouldApply = config.shouldApply;
     this._onUpdate = config.onUpdate;
     this._onUpdated = config.onUpdated;
+    this._onChildsContainerFound = config.onChildsContainerFound;
     for (var i = 0, len = this._element.length; i < len; ++i) {
         this._bind(this._element[i]);
     }
@@ -211,7 +212,13 @@ Fusioner.prototype = {
         // HTMLElement
         if (1 === element.nodeType) {
 
-            if (element.getAttribute('data-no-bind')) {
+            if (element.hasAttribute('data-no-bind')) {
+                return;
+            }
+
+            if (element.hasAttribute('data-childs')) {
+                element.removeAttribute('data-childs');
+                this._onChildsContainerFound(element);
                 return;
             }
 

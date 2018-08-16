@@ -4,7 +4,7 @@ var DOMManipulator = require('@/components/dom/DOMManipulator');
 var Fusioner = require('@/components/view/classes/Fusioner');
 var Model = require('@/components/model/classes/Model');
 var router = require('@/components/routing/Router');
-var view = require('@/components/view/Views');
+var views = require('@/components/view/Views');
 
 /**
  * View instances give an api for rendering an element based on a given template and context.
@@ -23,13 +23,13 @@ var View = function (config) {
 };
 
 View.prototype = {
-
     // Init vars
     _root: null,
     _template: null,
     _templateUrl: null,
     _context: null,
     _parent: null,
+    _childsContainer: null,
     // Event callbacks
     _onMounted: null,
     _onRender: null,
@@ -54,7 +54,7 @@ View.prototype = {
                 this[prop] = config[prop];
             }
         }
-        if (!this._root) {
+        if (!this._root && !this._parent) {
             throw new Error('Root must be defined to construct a view.');
         }
         if (!this._context) {
@@ -84,7 +84,11 @@ View.prototype = {
     },
 
     _getRoot: function () {
-        if ('string' === typeof this._root) {
+        // If inherits another view, return parent node prepared to receive child views
+        if (this._parent && !this._root) {
+            this._root = this._parent.getChildsContainer();
+        // Elsewise, try to find a dom element matching
+        } else if ('string' === typeof this._root) {
             var root = DOMManipulator.first(this._root);
             if (!root) {
                 throw new Error('Root element with selector "'+this._root+'" could not been found.');
@@ -105,11 +109,13 @@ View.prototype = {
         // Inheritance
         if (this._parent) {
             if (typeof this._parent === 'string') {
-                this._parent = view.get(this._parent);
+                this._parent = views.get(this._parent);
+            } else if (!(this._parent instanceof View)) {
+                throw new Error('View parent must be either another view name or instance.');
             }
             if (!this._parent.isRendered()) {
                 return this._parent.render(function () {
-                    self.render();
+                    self.render(callback);
                 });
             }
         }
@@ -153,6 +159,9 @@ View.prototype = {
                 context: this._context,
                 shouldApply: function () {
                     return self._rendered;
+                },
+                onChildsContainerFound: function (container) {
+                    self._childsContainer = container;
                 }
             };
             // Call onUpdate callback
@@ -238,6 +247,10 @@ View.prototype = {
      */
     isRendered: function () {
         return this._rendered;
+    },
+
+    getChildsContainer: function () {
+        return this._childsContainer;
     }
 };
 
