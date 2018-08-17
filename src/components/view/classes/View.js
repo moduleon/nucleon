@@ -45,11 +45,7 @@ View.prototype = {
     _buildConfig: function (config) {
         for (var prop in config) {
             if (null === this['_'+prop]) {
-                if ('context' === prop) {
-                    this['_'+prop] = this._buildContext(config[prop]);
-                } else {
-                    this['_'+prop] = config[prop];
-                }
+                this['_'+prop] = config[prop];
             } else {
                 this[prop] = config[prop];
             }
@@ -57,9 +53,7 @@ View.prototype = {
         if (!this._root && !this._parent) {
             throw new Error('Root must be defined to construct a view.');
         }
-        if (!this._context) {
-            this._context = this._buildContext({});
-        }
+        this._context = this._buildContext(this._context || {});
     },
 
     _buildContext: function (context) {
