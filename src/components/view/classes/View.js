@@ -29,7 +29,7 @@ View.prototype = {
     _templateUrl: null,
     _context: null,
     _parent: null,
-    _childsContainer: null,
+    _components: null,
     // Event callbacks
     _onMounted: null,
     _onRender: null,
@@ -39,24 +39,36 @@ View.prototype = {
     _onRevoke: null,
     _onRevoked: null,
     // Inner vars
+    _mounted: false,
+    _elements: [],
+    _position: null,
     _fusioner: null,
     _rendered: false,
+    _childsRoot: null,
+    _childsPosition: null,
 
     _buildConfig: function (config) {
         for (var prop in config) {
+            if (prop === 'components') {
+                this._components = {};
+                for (var componentName in config[prop]) {
+                    this._components[componentName.toLowerCase()] = config[prop][componentName];
+                }
+                continue;
+            }
             if (null === this['_'+prop]) {
                 this['_'+prop] = config[prop];
             } else {
                 this[prop] = config[prop];
             }
         }
-        if (!this._root && !this._parent) {
-            throw new Error('Root must be defined to construct a view.');
-        }
         this._context = this._buildContext(this._context || {});
     },
 
     _buildContext: function (context) {
+        if (context instanceof Model) {
+            return context;
+        }
         var prop;
         var _context = {};
         for (prop in context) {
@@ -78,9 +90,9 @@ View.prototype = {
     },
 
     _getRoot: function () {
-        // If inherits another view, return parent node prepared to receive child views
+        // If inherits another view, return parent node if no root defined
         if (this._parent && !this._root) {
-            this._root = this._parent.getChildsContainer();
+            this._root = this._parent._getRoot();
         // Elsewise, try to find a dom element matching
         } else if ('string' === typeof this._root) {
             var root = DOMManipulator.first(this._root);
@@ -91,6 +103,75 @@ View.prototype = {
         }
 
         return this._root;
+    },
+
+    _mount: function () {
+        var self = this;
+
+        // Template is a remote file, and is not loaded
+        if (!this._template && this._templateUrl) {
+            // Try to download it synchronously if url provided
+            client.get(this._templateUrl, { t_ref: new Date().getTime() }, {
+                async: false,
+                success: function (template) {
+                    self._template = template;
+                },
+                error: function () {
+                    throw new Error('Template located in "'+self._templateUrl+'" could not be loaded.');
+                }
+            });
+        } else if (!this._template && !this._templateUrl) {
+            // Elsewise, use root instead
+            this._elements = [this._getRoot()];
+        }
+
+        // Template is still a string value, and have not been turn into DOM element
+        if ('string' === typeof this._template && !this._elements.length) {
+            // Create html elements from string
+            var elements = DOMManipulator.createElement(this._template);
+            if (elements instanceof HTMLElement) {
+                this._elements = [elements];
+            } else if (elements instanceof DocumentFragment) {
+                this._elements = [];
+                while (elements.firstChild) {
+                    this._elements.push(elements.removeChild(elements.firstChild));
+                }
+            }
+        }
+
+        // Bind context to template if not done yet
+        if (!this._fusioner) {
+            var fusionerConfig = {
+                elements: this._elements,
+                context: this._context,
+                components: this._components,
+                view: this,
+                shouldApply: function () {
+                    return self._rendered;
+                }
+            };
+            // Call onUpdate callback
+            if ('function' === typeof self._onUpdate) {
+                fusionerConfig.onUpdate = function () {
+                    self._onUpdate();
+                };
+            }
+            // Call onUpdated callback
+            if ('function' === typeof self._onUpdated) {
+                fusionerConfig.onUpdated = function () {
+                    self._onUpdated();
+                };
+            }
+            this._fusioner = new Fusioner(fusionerConfig);
+        }
+
+        // If view has a parent, get root and position prepared for childs views
+        if (this._parent) {
+            this._root = this._parent._childsRoot;
+            this._position = this._parent._childsPosition;
+        }
+
+        this._mounted = true;
     },
 
     /**
@@ -114,63 +195,8 @@ View.prototype = {
             }
         }
 
-        // Template is not loaded
-        if (!this._template && this._templateUrl) {
-            // Try to download it synchronously if url provided
-            client.get(this._templateUrl, { t_ref: new Date().getTime() }, {
-                async: false,
-                success: function (template) {
-                    self._template = template;
-                },
-                error: function () {
-                    throw new Error('Template located in "'+self._templateUrl+'" could not be loaded.');
-                }
-            });
-        } else if (!this._template && !this._templateUrl) {
-            // Elsewise, use root instead
-            this._template = [this._getRoot()];
-        }
-
-        // Template is still a string value
-        if ('string' === typeof this._template) {
-            // Create html elements from string
-            this._template = DOMManipulator.createElement(this._template);
-            var elements = [];
-            if (this._template instanceof HTMLElement) {
-                elements.push(this._template);
-            } else if (this._template instanceof DocumentFragment) {
-                while (this._template.firstChild) {
-                    elements.push(this._template.removeChild(this._template.firstChild));
-                }
-            }
-            this._template = elements;
-        }
-
-        // Bind context to template if not done yet
-        if (!this._fusioner) {
-            var fusionerConfig = {
-                element: this._template,
-                context: this._context,
-                shouldApply: function () {
-                    return self._rendered;
-                },
-                onChildsContainerFound: function (container) {
-                    self._childsContainer = container;
-                }
-            };
-            // Call onUpdate callback
-            if ('function' === typeof self._onUpdate) {
-                fusionerConfig.onUpdate = function () {
-                    self._onUpdate();
-                };
-            }
-            // Call onUpdated callback
-            if ('function' === typeof self._onUpdated) {
-                fusionerConfig.onUpdated = function () {
-                    self._onUpdated();
-                };
-            }
-            this._fusioner = new Fusioner(fusionerConfig);
+        if (!this._mounted) {
+            this._mount();
         }
 
         // Template is not rendered
@@ -181,8 +207,8 @@ View.prototype = {
             }
             // Insert elements
             var root = this._getRoot();
-            if (this._template[0] !== root) {
-                DOMManipulator.insertElements(this._template, root);
+            if (this._elements[0] !== root) {
+                DOMManipulator.insertElements(this._elements, root, this._position);
             } else {
                 DOMManipulator.putBackElement(root);
             }
@@ -209,10 +235,10 @@ View.prototype = {
                 this._onRevoke();
             }
             var root = this._getRoot();
-            if (this._template[0] !== root) {
+            if (this._elements[0] !== root) {
                 // Remove each elements
-                for (var i = 0, len = this._template.length; i < len; ++i) {
-                    DOMManipulator.removeElement(this._template[i]);
+                for (var i = 0, len = this._elements.length; i < len; ++i) {
+                    DOMManipulator.removeElement(this._elements[i]);
                 }
             } else {
                 DOMManipulator.putAsideElement(root);
@@ -243,8 +269,38 @@ View.prototype = {
         return this._rendered;
     },
 
-    getChildsContainer: function () {
-        return this._childsContainer;
+    /**
+     * Get childs view root.
+     *
+     * @return {HTMLElement}
+     */
+    getChildsRoot: function () {
+        return this._childsRoot;
+    },
+
+    /**
+     * Clone view with a new config.
+     *
+     * @param  {object} newConfig
+     *
+     * @return {View}
+     */
+    clone: function (config) {
+        config = config || {};
+        config.root = config.root || this._root;
+        config.template = config.template || this._template;
+        config.templateUrl = config.templateUrl || this._templateUrl;
+        config.parent = config.parent || this._parent;
+        config.onMounted = config.onMounted || this._onMounted;
+        config.onRender = config.onRender || this.onRender;
+        config.onRendered = config.onRendered || this._onRendered;
+        config.onUpdate = config.onUpdate || this._onUpdate;
+        config.onUpdated = config.onUpdated || this._onUpdated;
+        config.onRevoke = config.onRevoke || this._onRevoke;
+        config.onRevoked = config.onRevoked || this._onRevoked;
+        config.context = config.context || {};
+
+        return new View(config);
     }
 };
 

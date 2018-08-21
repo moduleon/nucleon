@@ -20,17 +20,18 @@ var Fusioner = function (config) {
     this._init = [];
     this._waiting = [];
     this._events = {};
-    if (false === config.element instanceof Array) {
-        config.element = [config.element];
+    if (false === config.elements instanceof Array) {
+        config.elements = [config.elements];
     }
-    this._element = config.element;
+    this._elements = config.elements;
     this._context = config.context;
+    this._view = config.view;
+    this._components = config.components;
     this._shouldApply = config.shouldApply;
     this._onUpdate = config.onUpdate;
     this._onUpdated = config.onUpdated;
-    this._onChildsContainerFound = config.onChildsContainerFound;
-    for (var i = 0, len = this._element.length; i < len; ++i) {
-        this._bind(this._element[i]);
+    for (var i = this._elements.length - 1; i >= 0; --i) {
+        this._bind(this._elements[i]);
     }
 
     return this;
@@ -38,12 +39,15 @@ var Fusioner = function (config) {
 
 Fusioner.prototype = {
 
-    _element: null,
+    _elements: null,
     _context: null,
     _shouldApply: null,
+    _onUpdate: null,
+    _onUpdated: null,
     _init: null,
     _waiting: null,
     _events: null,
+    _view: null,
 
     _extractMarkers: function (string) {
         if (string) {
@@ -65,7 +69,7 @@ Fusioner.prototype = {
 
     _extractContextProperties: function (string) {
         var props = [];
-        var portions = string.split(/[ |(|)|{|}|[|]|,|:|\+|"|']/g); // TODO - Pourquoi avoir mis |"|', les valeurs entres guillements ne sont pas des références au context
+        var portions = string.split(/[ |(|)|{|}|[|]|,|:|\+]/g);
         for (var i = 0, len = portions.length, fragments, model; i < len; ++i) {
             fragments = portions[i].split('.');
             model = fragments.shift();
@@ -192,6 +196,62 @@ Fusioner.prototype = {
         }
     },
 
+    _createComponent: function (element, aliases, baseComponent) {
+        // Build component base context
+        var name;
+        var context = {};
+        var baseComponentContext = baseComponent.getContext();
+        for (name in baseComponentContext) {
+            if ('on' === name || 'trigger' === name) {
+                continue;
+            }
+            context[name] = baseComponentContext[name];
+        }
+        // Import values to inject in it
+        if (element.hasAttribute('data-context')) {
+            var expr = this._replaceAliases(element.getAttribute('data-context'), aliases);
+            var values = processor.process(expr, this._context);
+            for (name in values) {
+                context[name] = values[name];
+            }
+        }
+        // Build context
+        context = new Model(context);
+        // Build component
+        var root = element.parentNode || this._view._getRoot();
+        var position = DOMManipulator.getPosition(element);
+        var component = baseComponent.clone({ context: context, root: root, position: position });
+        // Bind modification for shared properties
+        component._mount();
+        var references = processor.process(expr, {}, false);
+        var self = this;
+        for (name in references) {
+            this._extractContextProperties(references[name] + '').forEach(function (prop) {
+                // Component to view changes
+                component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
+                    accessor.setPropertyValue(self._context, references[name], newValue);
+                });
+                // View to component changes
+                self._on('change', prop, function (newValue) {
+                    accessor.setPropertyValue(context, name, newValue);
+                });
+            });
+        }
+
+        return component;
+    },
+
+    _removeElement: function (element) {
+        if (element.parentNode) {
+            DOMManipulator.removeElement(element);
+        } else {
+            var index = this._elements.indexOf(element);
+            if (-1 !== index) {
+                this._elements.splice(index, 1);
+            }
+        }
+    },
+
     _bind: function (element, aliases) {
 
         if (!element) {
@@ -208,6 +268,8 @@ Fusioner.prototype = {
         var name;
         var content;
         var markers;
+        var tagName;
+        var component;
 
         // HTMLElement
         if (1 === element.nodeType) {
@@ -216,9 +278,13 @@ Fusioner.prototype = {
                 return;
             }
 
-            if (element.hasAttribute('data-childs')) {
-                element.removeAttribute('data-childs');
-                this._onChildsContainerFound(element);
+            tagName = element.tagName.toLowerCase();
+
+            // Childs root
+            if ('child-views' === tagName) {
+                this._view._childsRoot = element.parentNode || this._view._getRoot();
+                this._view._childsPosition = DOMManipulator.getPosition(element);
+                this._removeElement(element);
                 return;
             }
 
@@ -241,7 +307,7 @@ Fusioner.prototype = {
                 var parent = element.parentNode;
                 var position = DOMManipulator.getPosition(element);
                 // Put element aside. Will be used as a model for loop elements.
-                DOMManipulator.removeElement(element);
+                this._removeElement(element);
                 element.removeAttribute('data-for');
 
                 var iterable = processor.process(expr, this._context);
@@ -385,6 +451,43 @@ Fusioner.prototype = {
                 return;
             }
 
+            // Component
+            if (this._components && this._components[tagName]) {
+                component = this._createComponent(element, aliases, this._components[tagName]);
+                this._removeElement(element);
+                component.render();
+            }
+
+            // Conditional insertion
+            if ((attr = element.getAttribute('data-if'))) {
+                (function (attr) {
+                    var handleInsertion = function () {
+                        var result = processor.process(attr, self._context);
+                        if (undefined === result || false === result || null === result || '' === result) {
+                            component ? component.revoke() : DOMManipulator.putAsideElement(element);
+                        } else {
+                            component ? component.render() : DOMManipulator.putBackElement(element);
+                        }
+                    };
+                    // Wait for the element to be inserted before evaluating its insertion
+                    if (!element.parentNode && !component) {
+                        self._init.push(handleInsertion);
+                    } else {
+                        handleInsertion();
+                    }
+                    self._extractContextProperties(attr).forEach(function (prop) {
+                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                            self._on('change', prop, handleInsertion);
+                        }
+                    });
+                }(attr));
+                element.removeAttribute('data-if');
+            }
+
+            if (component) {
+                return;
+            }
+
             // Two-way data binding
             if ((attr = element.getAttribute('data-bind'))) {
                 prop = this._extractContextProperties(attr);
@@ -395,7 +498,6 @@ Fusioner.prototype = {
                 prop = prop[0];
                 propPath = this._getPropPath(prop);
 
-                var tagName = element.tagName.toLowerCase();
                 var updateValue;
                 if ('select' === tagName || ('input' === tagName && ('radio' === element.type || 'checkbox' === element.type))) {
                     // Set up value. Update in case of outer changes
@@ -433,7 +535,7 @@ Fusioner.prototype = {
                     // Set up value. Update in case of outer changes
                     updateValue = function (newValue) {
                         newValue = newValue || accessor.getPropertyValue(self._context, propPath);
-                        element.value = newValue || '';
+                        element.value = null !== newValue ? newValue : '';
                     };
                     updateValue(accessor.getPropertyValue(this._context, propPath));
                     this._on('change', prop, updateValue);
@@ -444,6 +546,7 @@ Fusioner.prototype = {
                         self._trigger('change', prop, target.value);
                     });
                 }
+                element.removeAttribute('data-bind');
             }
 
             // Events
@@ -463,32 +566,6 @@ Fusioner.prototype = {
                     }
                 }
                 element.removeAttribute('data-events');
-            }
-
-            // Conditional insertion
-            if ((attr = element.getAttribute('data-if'))) {
-                (function (attr) {
-                    var handleInsertion = function () {
-                        var result = processor.process(attr, self._context);
-                        if (undefined === result || false === result || null === result || '' === result) {
-                            DOMManipulator.putAsideElement(element);
-                        } else {
-                            DOMManipulator.putBackElement(element);
-                        }
-                    };
-                    // Wait for the element to be inserted before evaluating its insertion
-                    if (!element.parentNode) {
-                        self._init.push(handleInsertion);
-                    } else {
-                        handleInsertion();
-                    }
-                    self._extractContextProperties(attr).forEach(function (prop) {
-                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                            self._on('change', prop, handleInsertion);
-                        }
-                    });
-                }(attr));
-                element.removeAttribute('data-if');
             }
 
             // Conditional displaying
@@ -570,7 +647,7 @@ Fusioner.prototype = {
 
         // Recursive binding
         if (element.childNodes && element.childNodes.length > 0) {
-            for (i = 0, len = element.childNodes.length; i < len; ++i) {
+            for (i = element.childNodes.length - 1; i >= 0; --i) {
                 this._bind(element.childNodes[i], aliases);
             }
         }
