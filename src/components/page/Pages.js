@@ -1,10 +1,10 @@
 // Requirements
-var Page = require('@/components/page/classes/Page');
-var Request = require('@/components/http/classes/Request');
-var innerEvents = require('@/components/event/InnerEvents');
-var router = require('@/components/routing/Router');
-var redirect = require('@/components/http/Redirect');
-var channel = require('@/components/channel/Channel.js');
+var Page = require('../../../src/components/page/classes/Page');
+var Request = require('../../../src/components/http/classes/Request');
+var innerEvents = require('../../../src/components/event/InnerEvents');
+var router = require('../../../src/components/routing/Router');
+var redirect = require('../../../src/components/http/Redirect');
+var channel = require('../../../src/components/channel/Channel.js');
 
 /**
  * Pages is a container for Page instances.

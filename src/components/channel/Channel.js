@@ -1,5 +1,5 @@
 // Requirements
-var EventSystem = require('@/classes/EventSystem');
+var EventSystem = require('../../../src/classes/EventSystem');
 var es = new EventSystem();
 
 /**

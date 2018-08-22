@@ -1,7 +1,7 @@
 // Requirements
-var Collection = require('@/components/model/classes/Collection');
-var EventSystem = require('@/classes/EventSystem');
-var accessor = require('@/components/property/PropertyAccessor');
+var Collection = require('../../../../src/components/model/classes/Collection');
+var EventSystem = require('../../../../src/classes/EventSystem');
+var accessor = require('../../../../src/components/property/PropertyAccessor');
 
 /**
  * Model is a constructor for observable objects.
