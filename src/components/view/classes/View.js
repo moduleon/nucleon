@@ -286,10 +286,15 @@ View.prototype = {
      * @return {View}
      */
     clone: function (config) {
+        this._mount();
         config = config || {};
         config.root = config.root || this._root;
         config.template = config.template || this._template;
         config.templateUrl = config.templateUrl || this._templateUrl;
+        config.elements = [];
+        for (var i = 0, len = this._elements.length; i < len; ++i) {
+            config.elements.push(this._elements[i].cloneNode(true));
+        }
         config.parent = config.parent || this._parent;
         config.onMounted = config.onMounted || this._onMounted;
         config.onRender = config.onRender || this.onRender;
