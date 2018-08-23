@@ -19,7 +19,7 @@ describe('src/components/view/classes/Fusioner', function () {
     describe.only('new Fusioner(config)', function () {
 
         it('Should return a new Fusioner instance', function (done) {
-            element = DOMManipulator.createElement(
+            elements = DOMManipulator.createElement(
                 '<div id="test" data-if="user.show == true">'+
                     '<p>{{ user.firstname }} <a id="profile_btn" href="/{{ user.id }}">See</a></p>'+
                     '<ul id="friends_list" data-show="user.friends.length > 0">'+
@@ -27,9 +27,9 @@ describe('src/components/view/classes/Fusioner', function () {
                     '</ul>'+
                 '</div>'
             );
-            document.getElementsByTagName('body')[0].appendChild(element);
+            document.getElementsByTagName('body')[0].appendChild(elements);
             fusioner = new Fusioner({
-                element: element,
+                elements: elements,
                 context: new Model({
                     user: {
                         id: 1,
