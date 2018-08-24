@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+        //
+        // This example how to define inheritance between views.
+        //
+
+        // Building a layout to be included in body
+        var layout = app.views.add('layout', {
+            root: 'body',
+            template: (
+                '<div class="container">'+
+                    '<div>Layout title<div>'+
+                    '<child-views></child-views>'+
+                '</div>'
+            )
+        });
+
+        // Building a view inheriting the main layout
+        var extendingLayout = app.views.add('extending_layout', {
+            template: (
+                '<div>Extending layout title<div>'+
+                '<child-views></child-views>'
+            ),
+            parent: layout
+        });
+
+        // Building a page rendering a page extending the last layout
+        app.pages.add('test', {
+            route: '/views/inheritance.html',
+            view: {
+                template: (
+                    '<ul>'+
+                        '<li>Foo</li>'+
+                        '<li>Bar</li>'+
+                    '</ul>'
+                ),
+                parent: extendingLayout
+            }
+        });
+    </script>
+</body>
+</html>
