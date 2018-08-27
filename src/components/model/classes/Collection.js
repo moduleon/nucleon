@@ -39,6 +39,9 @@ for (var method in setters) {
                 change = arguments[1] ? arrayProto.slice.call(arguments) : arguments[0];
             }
             this._handler(event, change);
+            if ('change' !== event) {
+                this._handler('change', this);
+            }
 
             return returnValue;
         };

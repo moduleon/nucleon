@@ -190,13 +190,17 @@ Fusioner.prototype = {
             // Elsewise, store them in a queue
             } else {
                 for (i = 0, len = this._events[eventPath].length; i < len; ++i) {
+                    if (this._waiting.indexOf(this._events[eventPath][i]) !== -1) {
+                        continue;
+                    }
                     this._waiting.push(this._events[eventPath][i]);
                 }
             }
         }
     },
 
-    _createComponent: function (element, aliases, baseComponent) {
+    _createComponent: function (element, aliases, baseComponent, parentNode, position) {
+        var self = this;
         // Build component base context
         var name;
         var context = {};
@@ -207,35 +211,67 @@ Fusioner.prototype = {
             }
             context[name] = baseComponentContext[name];
         }
+
         // Import values to inject in it
+        var references;
         if (element.hasAttribute('data-context')) {
-            var expr = this._replaceAliases(element.getAttribute('data-context'), aliases);
-            var values = processor.process(expr, this._context);
-            for (name in values) {
-                context[name] = values[name];
+            var expr = element.getAttribute('data-context');
+            references = processor.process(expr, {}, false);
+            for (name in references) {
+                references[name] = this._replaceAliases(references[name], aliases);
+                context[name] = processor.process(references[name], this._context);
             }
         }
+
         // Build context
         context = new Model(context);
+
         // Build component
-        var root = element.parentNode || this._view._getRoot();
-        var position = DOMManipulator.getPosition(element);
+        var root = parentNode || element.parentNode || this._view._getRoot();
+        position = position || DOMManipulator.getPosition(element);
         var component = baseComponent.clone({ context: context, root: root, position: position });
+
         // Bind modification for shared properties
         component._mount();
-        var references = processor.process(expr, {}, false);
-        var self = this;
-        for (name in references) {
-            this._extractContextProperties(references[name] + '').forEach(function (prop) {
-                // Component to view changes
-                component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
-                    accessor.setPropertyValue(self._context, references[name], newValue);
+        if (references) {
+            for (name in references) {
+                this._extractContextProperties(references[name] + '').forEach(function (prop) {
+                    // Component to view changes
+                    component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
+                        // Handle missing values (callback on queue)
+                        newValue = newValue || accessor.getPropertyValue(component._context, name);
+                        accessor.setPropertyValue(self._context, references[name], newValue);
+                    });
+                    // View to component changes
+                    self._on('change', prop, function (newValue) {
+                        // Handle missing values (callback on queue)
+                        newValue = newValue || accessor.getPropertyValue(self._context, references[name]);
+                        accessor.setPropertyValue(context, name, newValue);
+                    });
                 });
-                // View to component changes
-                self._on('change', prop, function (newValue) {
-                    accessor.setPropertyValue(context, name, newValue);
+            }
+        }
+
+        // Handle conditional rendering
+        if (element.hasAttribute('data-if')) {
+            (function (expr) {
+                var handleInsertion = function () {
+                    var result = processor.process(expr, self._context);
+                    if (undefined === result || false === result || null === result || '' === result) {
+                        component.revoke();
+                    } else {
+                        component.render();
+                    }
+                };
+                handleInsertion();
+                self._extractContextProperties(expr).forEach(function (prop) {
+                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                        self._on('change', prop, handleInsertion);
+                    }
                 });
-            });
+            }(this._replaceAliases(element.getAttribute('data-if'), aliases)));
+        } else {
+            component.render();
         }
 
         return component;
@@ -663,36 +699,122 @@ Fusioner.prototype = {
     },
 
     _bindComponent: function (element, aliases, tagName) {
+        var self = this;
+        var parentNode = element.parentNode || this._view._getRoot();
+        this._removeElement(element);
+
         // Loop
         if (element.hasAttribute('data-for')) {
-            // TODO
-        }
 
-        var component = this._createComponent(element, aliases, this._components[tagName]);
-        this._removeElement(element);
-        component.render();
+            aliases = aliases || {};
 
-        // Conditional rendering
-        if (element.hasAttribute('data-if')) {
-            var self = this;
-            (function (attr) {
-                var handleInsertion = function () {
-                    var result = processor.process(attr, self._context);
-                    if (undefined === result || false === result || null === result || '' === result) {
-                        component.revoke();
+            var attr = element.getAttribute('data-for');
+            var alias = attr.replace(/in .*/, '').trim();
+            var key = null;
+            if (alias.indexOf(',') !== -1) {
+                alias = alias.split(',');
+                key = alias[0].trim();
+                alias = alias[1].trim();
+            }
+            var expr = this._replaceAliases(attr.replace(/.* in/, '').trim(), aliases);
+            var iterable = processor.process(expr, this._context);
+            if (
+                undefined === iterable || (
+                    false === iterable instanceof Collection &&
+                    false === iterable instanceof Object &&
+                    'number' !== typeof iterable
+                )
+            ) {
+                throw new Error(expr+' is an invalid expression for a loop.');
+            }
+
+            var props = this._extractContextProperties(expr);
+            var propPath = props.length ? this._getPropPath(props[0]) : null;
+
+            var components = [];
+
+            // For i in collection length
+            if (iterable instanceof Collection) {
+                var updateComponentsForCollection = function (newCollection) {
+                    newCollection = newCollection || accessor.getPropertyValue(self._context, propPath);
+                    var i;
+                    var len;
+                    // New collection longer than old collection
+                    if (newCollection.length > components.length) {
+                        for (i = components.length, len = newCollection.length; i < len; ++i) {
+                            aliases[alias] = propPath+'.'+i;
+                            if (key) {
+                                aliases[key] = i+'';
+                            }
+                            components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
+                        }
+                    // New collection smaller than old collection
                     } else {
-                        component.render();
+                        for (i = components.length - 1, len = newCollection.length - 1; i > len; --i) {
+                            components[i].revoke();
+                            components.splice(i, 1)[0] = null;
+                        }
                     }
                 };
-                handleInsertion();
-                self._extractContextProperties(attr).forEach(function (prop) {
-                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                        self._on('change', prop, handleInsertion);
+                updateComponentsForCollection(iterable);
+                this._on('change', props[0], updateComponentsForCollection);
+
+            // For prop name in object
+            } else if (iterable instanceof Object) {
+                var updateComponentForObject = function (newObject) {
+                    for (var i = components.length - 1; i >= 0; --i) {
+                        components[i].revoke();
+                        components.splice(i, 1)[0] = null;
                     }
-                });
-            }(element.getAttribute('data-if')));
-            element.removeAttribute('data-if');
+                    newObject = newObject || accessor.getPropertyValue(self._context, propPath);
+                    for (var propName in iterable) {
+                        if (!newObject.hasOwnProperty(propName) || 'function' === typeof newObject[propName]) {
+                            continue;
+                        }
+                        if (key) {
+                            aliases[key] = propName;
+                        }
+                        aliases[alias] = propPath;
+                        components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
+                    }
+                };
+                updateComponentForObject(iterable);
+                this._on('change', props[0], updateComponentForObject);
+
+            // For i in number
+            } else if ('number' === typeof iterable) {
+                var updateComponentForNumber = function (newNumber) {
+                    newNumber = newNumber || processor.process(expr, self._context);
+                    var i;
+                    if (newNumber > components.length) {
+                        for (i = components.length; i < newNumber; ++i) {
+                            aliases[alias] = i+'';
+                            components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
+                        }
+                    } else if (newNumber < components.length) {
+                        for (i = components.length - 1; i > newNumber; --i) {
+                            components[i].revoke();
+                            components.splice(i, 1)[0] = null;
+                        }
+                    }
+                };
+                updateComponentForNumber(iterable);
+                if (props.length === 0) {
+                    this._on('change', props[0], updateComponentForNumber);
+                } else if (props.length > 1) {
+                    for (var i = props.length - 1; i >= 0; --i) {
+                        this._on('change', props[i], function () {
+                            updateComponentForNumber(); // Don't pass value, which rely on multiple context values. Force recalculate.
+                        });
+                    }
+                }
+            }
+
+            return;
         }
+
+        // Single
+        this._createComponent(element, aliases, this._components[tagName], parentNode);
     },
 
     /**
