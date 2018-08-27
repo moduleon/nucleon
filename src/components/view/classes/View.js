@@ -31,7 +31,6 @@ View.prototype = {
     _parent: null,
     _components: null,
     // Event callbacks
-    _onMounted: null,
     _onRender: null,
     _onRendered: null,
     _onUpdate: null,
@@ -39,7 +38,6 @@ View.prototype = {
     _onRevoke: null,
     _onRevoked: null,
     // Inner vars
-    _mounted: false,
     _elements: [],
     _position: null,
     _fusioner: null,
@@ -105,7 +103,11 @@ View.prototype = {
         return this._root;
     },
 
-    _mount: function () {
+    _prepareElements: function () {
+        if (this._elements.length) {
+            return;
+        }
+
         var self = this;
 
         // Template is a remote file, and is not loaded
@@ -139,39 +141,48 @@ View.prototype = {
             }
         }
 
-        // Bind context to template if not done yet
-        if (!this._fusioner) {
-            var fusionerConfig = {
-                elements: this._elements,
-                context: this._context,
-                components: this._components,
-                view: this,
-                shouldApply: function () {
-                    return self._rendered;
-                }
-            };
-            // Call onUpdate callback
-            if ('function' === typeof self._onUpdate) {
-                fusionerConfig.onUpdate = function () {
-                    self._onUpdate();
-                };
-            }
-            // Call onUpdated callback
-            if ('function' === typeof self._onUpdated) {
-                fusionerConfig.onUpdated = function () {
-                    self._onUpdated();
-                };
-            }
-            this._fusioner = new Fusioner(fusionerConfig);
-        }
-
         // If view has a parent, get root and position prepared for childs views
         if (this._parent) {
             this._root = this._parent._childsRoot;
             this._position = this._parent._childsPosition;
         }
+    },
 
-        this._mounted = true;
+    _buildFusioner: function () {
+        if (this._fusioner) {
+            return;
+        }
+
+        var self = this;
+
+        // Bind context to template
+        var fusionerConfig = {
+            elements: this._elements,
+            context: this._context,
+            components: this._components,
+            view: this,
+            shouldApply: function () {
+                return self._rendered;
+            }
+        };
+        // Call onUpdate callback
+        if ('function' === typeof self._onUpdate) {
+            fusionerConfig.onUpdate = function () {
+                self._onUpdate();
+            };
+        }
+        // Call onUpdated callback
+        if ('function' === typeof self._onUpdated) {
+            fusionerConfig.onUpdated = function () {
+                self._onUpdated();
+            };
+        }
+        this._fusioner = new Fusioner(fusionerConfig);
+    },
+
+    _mount: function () {
+        this._prepareElements();
+        this._buildFusioner();
     },
 
     /**
@@ -195,9 +206,7 @@ View.prototype = {
             }
         }
 
-        if (!this._mounted) {
-            this._mount();
-        }
+        this._mount();
 
         // Template is not rendered
         if (!this._rendered) {
@@ -286,7 +295,7 @@ View.prototype = {
      * @return {View}
      */
     clone: function (config) {
-        this._mount();
+        this._prepareElements();
         config = config || {};
         config.root = config.root || this._root;
         config.template = config.template || this._template;
@@ -296,7 +305,6 @@ View.prototype = {
             config.elements.push(this._elements[i].cloneNode(true));
         }
         config.parent = config.parent || this._parent;
-        config.onMounted = config.onMounted || this._onMounted;
         config.onRender = config.onRender || this.onRender;
         config.onRendered = config.onRendered || this._onRendered;
         config.onUpdate = config.onUpdate || this._onUpdate;
