@@ -137,7 +137,7 @@ Fusioner.prototype = {
     },
 
     _getPropPath: function (prop) {
-        return (prop.model ? prop.model+'.' : '')+prop.path;
+        return (prop.model ? prop.model + (prop.path ? '.': '') : '') + prop.path;
     },
 
     _on: function (event, prop, callback) {
@@ -716,15 +716,10 @@ Fusioner.prototype = {
                 key = alias[0].trim();
                 alias = alias[1].trim();
             }
+
             var expr = this._replaceAliases(attr.replace(/.* in/, '').trim(), aliases);
             var iterable = processor.process(expr, this._context);
-            if (
-                undefined === iterable || (
-                    false === iterable instanceof Collection &&
-                    false === iterable instanceof Object &&
-                    'number' !== typeof iterable
-                )
-            ) {
+            if (false === this._isIterable(iterable)) {
                 throw new Error(expr+' is an invalid expression for a loop.');
             }
 
@@ -772,14 +767,16 @@ Fusioner.prototype = {
                             continue;
                         }
                         if (key) {
-                            aliases[key] = propName;
+                            aliases[key] = '"'+propName+'"';
                         }
-                        aliases[alias] = propPath;
+                        aliases[alias] = propPath+'.'+propName;
                         components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
                     }
                 };
                 updateComponentForObject(iterable);
-                this._on('change', props[0], updateComponentForObject);
+                if (props.length) {
+                    this._on('change', props[0], updateComponentForObject);
+                }
 
             // For i in number
             } else if ('number' === typeof iterable) {
@@ -799,7 +796,7 @@ Fusioner.prototype = {
                     }
                 };
                 updateComponentForNumber(iterable);
-                if (props.length === 0) {
+                if (props.length === 1) {
                     this._on('change', props[0], updateComponentForNumber);
                 } else if (props.length > 1) {
                     for (var i = props.length - 1; i >= 0; --i) {
@@ -815,6 +812,10 @@ Fusioner.prototype = {
 
         // Single
         this._createComponent(element, aliases, this._components[tagName], parentNode);
+    },
+
+    _isIterable: function (thing) {
+        return true === thing instanceof Collection || true === thing instanceof Object || 'number' === typeof thing;
     },
 
     /**
