@@ -22,6 +22,12 @@ EventSystem.prototype = {
      */
     _callbacks: null,
 
+    _extractEvents: function (string) {
+        return string.split(',').map(function(event) {
+            return event.trim();
+        });
+    },
+
     /**
      * Add callback to a target event.
      *
@@ -31,9 +37,12 @@ EventSystem.prototype = {
      */
     on: function (event, target, callback) {
         this._callbacks[target] = this._callbacks[target] || {};
-        this._callbacks[target][event] = this._callbacks[target][event] || [];
-        if (this._callbacks[target][event].indexOf(callback) === -1) {
-            this._callbacks[target][event].push(callback);
+        var events = this._extractEvents(event);
+        for (var i = 0, len = events.length; i < len; ++i) {
+            this._callbacks[target][events[i]] = this._callbacks[target][events[i]] || [];
+            if (this._callbacks[target][events[i]].indexOf(callback) === -1) {
+                this._callbacks[target][events[i]].push(callback);
+            }
         }
 
         return this;
@@ -47,12 +56,17 @@ EventSystem.prototype = {
      * @param  {Function} callback
      */
     off: function (event, target, callback) {
-        if (!this._callbacks[target] || !this._callbacks[target][event]) {
-            return;
-        }
-        var index = this._callbacks[target][event].indexOf(callback);
-        if (index !== -1) {
-            this._callbacks[target][event].splice(index, 1);
+        if (this._callbacks[target]) {
+            var events = this._extractEvents(event);
+            for (var i = 0, len = events.length; i < len; ++i) {
+                if (!this._callbacks[target][events[i]]) {
+                    continue;
+                }
+                var index = this._callbacks[target][events[i]].indexOf(callback);
+                if (index !== -1) {
+                    this._callbacks[target][events[i]].splice(index, 1);
+                }
+            }
         }
 
         return this;
@@ -65,13 +79,17 @@ EventSystem.prototype = {
      * @param  {string} target
      */
     trigger: function (event, target) {
-        if (!this._callbacks[target] || !this._callbacks[target][event]) {
-            return;
-        }
-        for (var i = 0, len = this._callbacks[target][event].length; i < len; ++i) {
-            // If listener returns false, stop propagating
-            if (false === this._callbacks[target][event][i].apply(this, Array.prototype.slice.call(arguments, 2))) {
-                return false;
+        if (this._callbacks[target]) {
+            var events = this._extractEvents(event);
+            var j;
+            var len2;
+            for (var i = 0, len = events.length; i < len; ++i) {
+                for (j = 0, len2 = this._callbacks[target][events[i]].length; j < len2; ++j) {
+                    // If listener returns false, stop propagating
+                    if (false === this._callbacks[target][events[i]][j].apply(this, Array.prototype.slice.call(arguments, 2))) {
+                        break;
+                    }
+                }
             }
         }
 
