@@ -82,7 +82,7 @@ var app =
 /******/
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 14);
+/******/ 	return __webpack_require__(__webpack_require__.s = 16);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -473,6 +473,170 @@ module.exports = new DOMManipulator();
 
 /***/ }),
 /* 1 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// Requirements
+var Collection = __webpack_require__(3);
+var EventSystem = __webpack_require__(9);
+var accessor = __webpack_require__(4);
+
+/**
+ * Model is a constructor for observable objects.
+ *
+ * @constructor
+ * @param {object} obj
+ * @return {Model}
+ *
+ * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
+ * @package nucleon-js
+ */
+var Model = function (obj) {
+
+    var es = new EventSystem();
+    accessor.duplicateProperties(obj, this);
+    watch(this, null, es);
+
+    this.on = function (event, path, callback) {
+        es.on(event, path, callback);
+    };
+
+    this.trigger = function (event, path, newValue) {
+        if ('change' === event) {
+            var oldValue = accessor.getPropertyValue(this, path);
+            if (newValue !== oldValue) {
+                accessor.setPropertyValue(this, path, newValue);
+            }
+        }
+    };
+
+    return this;
+};
+
+function watch (target, path, es) {
+    var prop;
+    var propType;
+    for (prop in target) {
+        propType = accessor.getTypeOf(target[prop]);
+        if (!target.hasOwnProperty(prop) || 'function' === propType) {
+            continue;
+        }
+        (function (actualPath) {
+            watchProperty(target, prop, function (event, prop, newValue, oldValue) {
+                es.trigger(event, actualPath, newValue, oldValue);
+            });
+            watchObjectOrArray(target, prop, actualPath, target[prop], propType, es);
+        }(path ? (path + '.' + prop) : prop));
+    }
+}
+
+function watchObjectOrArray(target, prop, path, value, propType, es) {
+
+    if (target[prop] instanceof Collection) {
+        return;
+    }
+
+    propType = propType || accessor.getTypeOf(value);
+
+    // Object detected
+    if ('object' === propType) {
+        // Recursing binding
+        watch(target[prop], path, es);
+        es
+            // If object in a prop is replaced by another one
+            .on('change', path, function (newValue, oldValue) {
+                // Watch new object
+                watch(target[prop], path, es);
+                // Trigger related listener, to force refreshing
+                for (var propPath in es._callbacks) {
+                    if (path !== propPath && 0 === propPath.indexOf(path)) {
+                        es.trigger(
+                            'change',
+                            propPath,
+                            accessor.getPropertyValue(newValue, propPath),
+                            accessor.getPropertyValue(oldValue, propPath)
+                        );
+                    }
+                }
+            })
+        ;
+    // Array detected
+    } else if ('array' === propType) {
+        // Turn it into a collection
+        target[prop] = new Collection(value, function (event, change, oldValue) {
+            es.trigger(event, path, change, oldValue);
+        });
+        // Recursing binding
+        watch(target[prop], path, es);
+        es
+            // If collection in a prop is replaced by an array
+            .on('change', path, function (newValue) {
+                if (target[prop] instanceof Collection) {
+                    return;
+                }
+                // Watch the new one, turn it into a Collection
+                newValue = newValue || target[prop];
+                delete target[prop];
+                target[prop] = new Collection(newValue, function (event, change, oldValue) {
+                    es.trigger(event, path, change, oldValue);
+                });
+                watchProperty(target, prop, function (event, prop, newValue, oldValue) {
+                    es.trigger(event, path, newValue, oldValue);
+                });
+                watch(target[prop], path, es);
+            })
+            // If adding in collection
+            .on('add', path, function (changes) {
+                var index;
+                // Multiple adding
+                if (changes instanceof Array) {
+                    for (var i = 0, len = changes.length; i < len; ++i) {
+                        index = target[prop].indexOf(changes[i]);
+                        (function (actualPath) {
+                            watchProperty(target[prop], index, function (event, prop, newValue, oldValue) {
+                                es.trigger(event, actualPath, newValue, oldValue);
+                            });
+                            watchObjectOrArray(target[prop], index, actualPath, target[prop][index], null, es);
+                        }(path ? (path + '.' + index) : index));
+                    }
+                // Single adding
+                } else {
+                    index = target[prop].indexOf(changes);
+                    (function (actualPath) {
+                        watchProperty(target[prop], index, function (event, prop, newValue, oldValue) {
+                            es.trigger(event, actualPath, newValue, oldValue);
+                        });
+                        watchObjectOrArray(target[prop], index, actualPath, target[prop][index], null, es);
+                    }(path ? (path + '.' + index) : index));
+                }
+            })
+        ;
+    }
+}
+
+function watchProperty (target, prop, handler) {
+    var value = target[prop];
+    var oldValue = value;
+    accessor.redefineProperty(
+        target,
+        prop,
+        function () {
+            return value;
+        },
+        function (newValue) {
+            oldValue = value;
+            value = newValue;
+            if (oldValue !== newValue) {
+                handler('change', prop, newValue, oldValue);
+            }
+        }
+    );
+}
+
+module.exports = Model;
+
+
+/***/ }),
+/* 2 */
 /***/ (function(module, exports) {
 
 /**
@@ -548,7 +712,83 @@ module.exports = new Router();
 
 
 /***/ }),
-/* 2 */
+/* 3 */
+/***/ (function(module, exports) {
+
+/**
+ * Collection turns an array into an observable array-like object.
+ *
+ * @constructor
+ * @param {array} source
+ * @param {function} handler
+ * @return {Collection}
+ *
+ * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
+ * @package nucleon-js
+ */
+var Collection = function (source, handler) {
+    for (var i = 0, len = source.length; i < len; ++i) {
+        this[i] = source[i];
+    }
+    this.length = source.length;
+    this._handler = handler;
+
+    return this;
+};
+
+var arrayProto = Array.prototype;
+
+var clone = function (obj) {
+    var cloned = [];
+    for (var i = 0, len = obj.length; i < len; ++i) {
+        cloned.push(obj[i]);
+    }
+
+    return cloned;
+};
+
+// Defining setters from Array prototype
+// Adding changes handler.
+var setters = {
+    'pop': 'remove', 'push': 'add', 'reverse': 'change', 'shift': 'remove',
+    'sort': 'change', 'splice': 'remove', 'unshift': 'add'
+};
+for (var method in setters) {
+    (function (method) {
+        Collection.prototype[method] = function () {
+            var oldValue = clone(this);
+            var event = setters[method];
+            var returnValue = arrayProto[method].apply(this, arguments);
+            var change;
+            if ('remove' === event || 'change' === event) {
+                change = returnValue;
+            } else if ('add' === event) {
+                change = arguments[1] ? arrayProto.slice.call(arguments) : arguments[0];
+            }
+            this._handler(event, change, oldValue);
+            if ('change' !== event) {
+                this._handler('change', this, oldValue);
+            }
+
+            return returnValue;
+        };
+    }(method));
+}
+
+// Defining getters from Array prototype
+var getters = [
+    'concat', 'every', 'filter', 'forEach', 'indexOf', 'join', 'lastIndexOf', 'map',
+    'reduce', 'reduceRight', 'slice', 'some', 'toLocaleString', 'toString'
+];
+for (var i = 0, len = getters.length; i < len; ++i) {
+    Collection.prototype[getters[i]] = arrayProto[getters[i]];
+}
+
+module.exports = Collection;
+
+
+/***/ }),
+/* 4 */
 /***/ (function(module, exports) {
 
 /**
@@ -678,166 +918,7 @@ module.exports = propertyAccessor;
 
 
 /***/ }),
-/* 3 */
-/***/ (function(module, exports, __webpack_require__) {
-
-// Requirements
-var Collection = __webpack_require__(10);
-var EventSystem = __webpack_require__(6);
-var accessor = __webpack_require__(2);
-
-/**
- * Model is a constructor for observable objects.
- *
- * @constructor
- * @param {object} obj
- * @return {Model}
- *
- * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
- * @package nucleon-js
- */
-var Model = function (obj) {
-
-    var es = new EventSystem();
-    accessor.duplicateProperties(obj, this);
-    watch(this, null, es);
-
-    this.on = function (event, path, callback) {
-        es.on(event, path, callback);
-    };
-
-    this.trigger = function (event, path, newValue) {
-        if ('change' === event) {
-            var oldValue = accessor.getPropertyValue(this, path);
-            if (newValue !== oldValue) {
-                accessor.setPropertyValue(this, path, newValue);
-            }
-        }
-    };
-
-    return this;
-};
-
-function watch (target, path, es) {
-    var prop;
-    var propType;
-    for (prop in target) {
-        propType = accessor.getTypeOf(target[prop]);
-        if (!target.hasOwnProperty(prop) || 'function' === propType) {
-            continue;
-        }
-        (function (actualPath) {
-            watchProperty(target, prop, function (event, prop, newValue, oldValue) {
-                es.trigger(event, actualPath, newValue, oldValue);
-            });
-            watchObjectOrArray(target, prop, actualPath, target[prop], propType, es);
-        }(path ? (path + '.' + prop) : prop));
-    }
-}
-
-function watchObjectOrArray(target, prop, path, value, propType, es) {
-
-    if (target[prop] instanceof Collection) {
-        return;
-    }
-
-    propType = propType || accessor.getTypeOf(value);
-
-    // Object detected
-    if ('object' === propType) {
-        // Recursing binding
-        watch(target[prop], path, es);
-        es
-            // If object in a prop is replaced by another one
-            .on('change', path, function () {
-                // Watch new object
-                watch(target[prop], path, es);
-                // Trigger related listener, to force refreshing
-                for (var propPath in es._callbacks) {
-                    if (path !== propPath && -1 !== propPath.indexOf(path)) {
-                        es.trigger('change', propPath, accessor.getPropertyValue(target[prop], propPath));
-                    }
-                }
-            })
-        ;
-    // Array detected
-    } else if ('array' === propType) {
-        // Turn it into a collection
-        target[prop] = new Collection(value, function (event, change) {
-            es.trigger(event, path, change);
-        });
-        // Recursing binding
-        watch(target[prop], path, es);
-        es
-            // If collection in a prop is replaced by an array
-            .on('change', path, function (value) {
-                if (target[prop] instanceof Collection) {
-                    return;
-                }
-                // Watch the new one, turn it into a Collection
-                value = value || target[prop];
-                delete target[prop];
-                target[prop] = new Collection(value, function (event, change) {
-                    es.trigger(event, path, change);
-                });
-                watchProperty(target, prop, function (event, prop, newValue, oldValue) {
-                    es.trigger(event, path, newValue, oldValue);
-                });
-                watch(target[prop], path, es);
-            })
-            // If adding in collection
-            .on('add', path, function (changes) {
-                var index;
-                // Multiple adding
-                if (changes instanceof Array) {
-                    for (var i = 0, len = changes.length; i < len; ++i) {
-                        index = target[prop].indexOf(changes[i]);
-                        (function (actualPath) {
-                            watchProperty(target[prop], index, function (event, prop, newValue, oldValue) {
-                                es.trigger(event, actualPath, newValue, oldValue);
-                            });
-                            watchObjectOrArray(target[prop], index, actualPath, target[prop][index], null, es);
-                        }(path ? (path + '.' + index) : index));
-                    }
-                // Single adding
-                } else {
-                    index = target[prop].indexOf(changes);
-                    (function (actualPath) {
-                        watchProperty(target[prop], index, function (event, prop, newValue, oldValue) {
-                            es.trigger(event, actualPath, newValue, oldValue);
-                        });
-                        watchObjectOrArray(target[prop], index, actualPath, target[prop][index], null, es);
-                    }(path ? (path + '.' + index) : index));
-                }
-            })
-        ;
-    }
-}
-
-function watchProperty (target, prop, handler) {
-    var value = target[prop];
-    var oldValue = value;
-    accessor.redefineProperty(
-        target,
-        prop,
-        function () {
-            return value;
-        },
-        function (newValue) {
-            oldValue = value;
-            value = newValue;
-            if (oldValue !== newValue) {
-                handler('change', prop, newValue, oldValue);
-            }
-        }
-    );
-}
-
-module.exports = Model;
-
-
-/***/ }),
-/* 4 */
+/* 5 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -850,7 +931,7 @@ module.exports = Model;
  * @package nucleon-js
  */
 var redirect = function (url, storeInHistory) {
-    var pages = __webpack_require__(11);
+    var pages = __webpack_require__(15);
     var btn = document.createElement('a');
     btn.href = url;
 
@@ -861,11 +942,428 @@ module.exports = redirect;
 
 
 /***/ }),
-/* 5 */
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
-var EventSystem = __webpack_require__(6);
+var View = __webpack_require__(7);
+
+/**
+ * Views is a container for View instances.
+ *
+ * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
+ * @package nucleon-js
+ */
+var views = new function () {
+
+    var storage = {};
+
+    /**
+     * Add a view in the app.
+     *
+     * @param {string} name
+     * @param {object} config
+     *
+     * @return {View}
+     */
+    this.add = function (name, config) {
+        if (undefined !== storage[name]) {
+            throw new Error('A view with the name "'+name+'" is already defined.');
+        }
+        storage[name] = new View(config);
+
+        return storage[name];
+    };
+
+    /**
+     * Get a view from the app.
+     *
+     * @param  {string} name
+     *
+     * @return {View}
+     */
+    this.get = function (name) {
+        if (undefined === storage[name]) {
+            throw new Error('No view with the name "'+name+'" could be found.');
+        }
+
+        return storage[name];
+    };
+
+    /**
+     * Render a view from the app.
+     *
+     * @param  {string}  name
+     * @param  {boolean} detached  defines if rendering is detached from auto-revocation
+     */
+    this.render = function (name, detached) {
+        if (undefined === storage[name]) {
+            throw new Error('No view with the name "'+name+'" could be found.');
+        }
+        if (true !== detached) {
+            var root = storage[name]._getRoot();
+            var view;
+            for (var viewName in storage) {
+                if (viewName === name) {
+                    continue;
+                }
+                view = storage[viewName];
+                if (view.isRendered() && view._getRoot() === root) {
+                    view.revoke();
+                }
+            }
+        }
+        storage[name].render();
+    };
+
+    /**
+     * Revoke a view from the app.
+     *
+     * @param  {string} name
+     */
+    this.revoke = function (name) {
+        if (undefined === storage[name]) {
+            throw new Error('No view with the name "'+name+'" could be found.');
+        }
+        storage[name].revoke();
+    };
+};
+
+module.exports = views;
+
+
+/***/ }),
+/* 7 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// Requirements
+var client = __webpack_require__(12);
+var DOMManipulator = __webpack_require__(0);
+var Fusioner = __webpack_require__(22);
+var Model = __webpack_require__(1);
+var router = __webpack_require__(2);
+var views = __webpack_require__(6);
+
+/**
+ * View instances give an api for rendering an element based on a given template and context.
+ *
+ * @constructor
+ * @param {object} config
+ * @return {View}
+ *
+ * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
+ * @package nucleon-js
+ */
+var View = function (config) {
+    this._buildConfig(config);
+
+    return this;
+};
+
+View.prototype = {
+    // Init vars
+    _root: null,
+    _template: null,
+    _templateUrl: null,
+    _context: null,
+    _parent: null,
+    _components: null,
+    // Event callbacks
+    _onRender: null,
+    _onRendered: null,
+    _onUpdate: null,
+    _onUpdated: null,
+    _onRevoke: null,
+    _onRevoked: null,
+    // Inner vars
+    _elements: [],
+    _position: null,
+    _fusioner: null,
+    _rendered: false,
+    _childsRoot: null,
+    _childsPosition: null,
+
+    _buildConfig: function (config) {
+        for (var prop in config) {
+            if (prop === 'components') {
+                this._components = {};
+                for (var componentName in config[prop]) {
+                    this._components[componentName.toLowerCase()] = config[prop][componentName];
+                }
+                continue;
+            }
+            if (null === this['_'+prop]) {
+                this['_'+prop] = config[prop];
+            } else {
+                this[prop] = config[prop];
+            }
+        }
+        this._context = this._buildContext(this._context || {});
+    },
+
+    _buildContext: function (context) {
+        if (context instanceof Model) {
+            return context;
+        }
+        var prop;
+        var _context = {};
+        for (prop in context) {
+            if (false === context[prop] instanceof Model) {
+                _context[prop] = context[prop];
+                delete context[prop];
+            }
+        }
+        _context = new Model(_context);
+        for (prop in context) {
+            _context[prop] = context[prop];
+        }
+        // Adding routing method in context
+        _context.generateUrl = function (routeName, params, withHost) {
+            return router.generateUrl(routeName, params, withHost);
+        };
+
+        return _context;
+    },
+
+    _getRoot: function () {
+        // If inherits another view, return parent node if no root defined
+        if (this._parent && !this._root) {
+            this._root = this._parent._getRoot();
+        // Elsewise, try to find a dom element matching
+        } else if ('string' === typeof this._root) {
+            var root = DOMManipulator.first(this._root);
+            if (!root) {
+                throw new Error('Root element with selector "'+this._root+'" could not been found.');
+            }
+            this._root = root;
+        }
+
+        return this._root;
+    },
+
+    _prepareElements: function () {
+        if (this._elements.length) {
+            return;
+        }
+
+        var self = this;
+
+        // Template is a remote file, and is not loaded
+        if (!this._template && this._templateUrl) {
+            // Try to download it synchronously if url provided
+            client.get(this._templateUrl, { t_ref: new Date().getTime() }, {
+                async: false,
+                success: function (template) {
+                    self._template = template;
+                },
+                error: function () {
+                    throw new Error('Template located in "'+self._templateUrl+'" could not be loaded.');
+                }
+            });
+        } else if (!this._template && !this._templateUrl) {
+            // Elsewise, use root instead
+            this._elements = [this._getRoot()];
+        }
+
+        // Template is still a string value, and have not been turn into DOM element
+        if ('string' === typeof this._template && !this._elements.length) {
+            // Create html elements from string
+            var elements = DOMManipulator.createElement(this._template);
+            if (elements instanceof HTMLElement) {
+                this._elements = [elements];
+            } else if (elements instanceof DocumentFragment) {
+                this._elements = [];
+                while (elements.firstChild) {
+                    this._elements.push(elements.removeChild(elements.firstChild));
+                }
+            }
+        }
+
+        // If view has a parent, get root and position prepared for childs views
+        if (this._parent) {
+            this._root = this._parent._childsRoot;
+            this._position = this._parent._childsPosition;
+        }
+    },
+
+    _buildFusioner: function () {
+        if (this._fusioner) {
+            return;
+        }
+
+        var self = this;
+
+        // Bind context to template
+        var fusionerConfig = {
+            elements: this._elements,
+            context: this._context,
+            components: this._components,
+            view: this,
+            shouldApply: function () {
+                return self._rendered;
+            }
+        };
+        // Call onUpdate callback
+        if ('function' === typeof self._onUpdate) {
+            fusionerConfig.onUpdate = function () {
+                self._onUpdate();
+            };
+        }
+        // Call onUpdated callback
+        if ('function' === typeof self._onUpdated) {
+            fusionerConfig.onUpdated = function () {
+                self._onUpdated();
+            };
+        }
+        this._fusioner = new Fusioner(fusionerConfig);
+    },
+
+    _mount: function () {
+        this._prepareElements();
+        this._buildFusioner();
+    },
+
+    /**
+     * Insert view elements in the DOM.
+     */
+    render: function (callback) {
+
+        var self = this;
+
+        // Inheritance
+        if (this._parent) {
+            if (typeof this._parent === 'string') {
+                this._parent = views.get(this._parent);
+            } else if (!(this._parent instanceof View)) {
+                throw new Error('View parent must be either another view name or instance.');
+            }
+            if (!this._parent.isRendered()) {
+                return this._parent.render(function () {
+                    self.render(callback);
+                });
+            }
+        }
+
+        this._mount();
+
+        // Template is not rendered
+        if (!this._rendered) {
+            // Call onRender callback
+            if ('function' === typeof this._onRender) {
+                this._onRender();
+            }
+            // Insert elements
+            var root = this._getRoot();
+            if (this._elements[0] !== root) {
+                DOMManipulator.insertElements(this._elements, root, this._position);
+            } else {
+                DOMManipulator.putBackElement(root);
+            }
+            this._rendered = true;
+            // Call onRendered callback
+            if ('function' === typeof this._onRendered) {
+                this._onRendered();
+            }
+            this._fusioner.applyChanges();
+        }
+
+        if (typeof callback === 'function') {
+            callback();
+        }
+    },
+
+    /**
+     * Remove view elements from the DOM.
+     */
+    revoke: function () {
+        if (this._rendered) {
+            // Call onRevoke callback
+            if ('function' === typeof this._onRevoke) {
+                this._onRevoke();
+            }
+            var root = this._getRoot();
+            if (this._elements[0] !== root) {
+                // Remove each elements
+                for (var i = 0, len = this._elements.length; i < len; ++i) {
+                    DOMManipulator.removeElement(this._elements[i]);
+                }
+            } else {
+                DOMManipulator.putAsideElement(root);
+            }
+            this._rendered = false;
+            // Call onRevoked callback
+            if ('function' === typeof this._onRevoked) {
+                this._onRevoked();
+            }
+        }
+    },
+
+    /**
+     * Get the view execution context
+     *
+     * @return {null|Model}
+     */
+    getContext: function () {
+        return this._context;
+    },
+
+    /**
+     * Check if view is rendered.
+     *
+     * @return {Boolean}
+     */
+    isRendered: function () {
+        return this._rendered;
+    },
+
+    /**
+     * Get childs view root.
+     *
+     * @return {HTMLElement}
+     */
+    getChildsRoot: function () {
+        return this._childsRoot;
+    },
+
+    /**
+     * Clone view with a new config.
+     *
+     * @param  {object} newConfig
+     *
+     * @return {View}
+     */
+    clone: function (config) {
+        this._prepareElements();
+        config = config || {};
+        config.root = config.root || this._root;
+        config.template = config.template || this._template;
+        config.templateUrl = config.templateUrl || this._templateUrl;
+        config.elements = [];
+        for (var i = 0, len = this._elements.length; i < len; ++i) {
+            config.elements.push(this._elements[i].cloneNode(true));
+        }
+        config.parent = config.parent || this._parent;
+        config.onRender = config.onRender || this.onRender;
+        config.onRendered = config.onRendered || this._onRendered;
+        config.onUpdate = config.onUpdate || this._onUpdate;
+        config.onUpdated = config.onUpdated || this._onUpdated;
+        config.onRevoke = config.onRevoke || this._onRevoke;
+        config.onRevoked = config.onRevoked || this._onRevoked;
+        config.context = config.context || {};
+
+        return new View(config);
+    }
+};
+
+module.exports = View;
+
+
+/***/ }),
+/* 8 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// Requirements
+var EventSystem = __webpack_require__(9);
 var es = new EventSystem();
 
 /**
@@ -916,7 +1414,7 @@ module.exports = channel;
 
 
 /***/ }),
-/* 6 */
+/* 9 */
 /***/ (function(module, exports) {
 
 /**
@@ -943,6 +1441,12 @@ EventSystem.prototype = {
      */
     _callbacks: null,
 
+    _extractEvents: function (string) {
+        return string.split(',').map(function(event) {
+            return event.trim();
+        });
+    },
+
     /**
      * Add callback to a target event.
      *
@@ -952,9 +1456,12 @@ EventSystem.prototype = {
      */
     on: function (event, target, callback) {
         this._callbacks[target] = this._callbacks[target] || {};
-        this._callbacks[target][event] = this._callbacks[target][event] || [];
-        if (this._callbacks[target][event].indexOf(callback) === -1) {
-            this._callbacks[target][event].push(callback);
+        var events = this._extractEvents(event);
+        for (var i = 0, len = events.length; i < len; ++i) {
+            this._callbacks[target][events[i]] = this._callbacks[target][events[i]] || [];
+            if (this._callbacks[target][events[i]].indexOf(callback) === -1) {
+                this._callbacks[target][events[i]].push(callback);
+            }
         }
 
         return this;
@@ -968,12 +1475,17 @@ EventSystem.prototype = {
      * @param  {Function} callback
      */
     off: function (event, target, callback) {
-        if (!this._callbacks[target] || !this._callbacks[target][event]) {
-            return;
-        }
-        var index = this._callbacks[target][event].indexOf(callback);
-        if (index !== -1) {
-            this._callbacks[target][event].splice(index, 1);
+        if (this._callbacks[target]) {
+            var events = this._extractEvents(event);
+            for (var i = 0, len = events.length; i < len; ++i) {
+                if (!this._callbacks[target][events[i]]) {
+                    continue;
+                }
+                var index = this._callbacks[target][events[i]].indexOf(callback);
+                if (index !== -1) {
+                    this._callbacks[target][events[i]].splice(index, 1);
+                }
+            }
         }
 
         return this;
@@ -986,13 +1498,21 @@ EventSystem.prototype = {
      * @param  {string} target
      */
     trigger: function (event, target) {
-        if (!this._callbacks[target] || !this._callbacks[target][event]) {
-            return;
-        }
-        for (var i = 0, len = this._callbacks[target][event].length; i < len; ++i) {
-            // If listener returns false, stop propagating
-            if (false === this._callbacks[target][event][i].apply(this, Array.prototype.slice.call(arguments, 2))) {
-                return false;
+        if (this._callbacks[target]) {
+            var events = this._extractEvents(event);
+            var j;
+            var len2;
+            var args = Array.prototype.slice.call(arguments, 2);
+            for (var i = 0, len = events.length; i < len; ++i) {
+                if (!this._callbacks[target][events[i]]) {
+                    continue;
+                }
+                for (j = 0, len2 = this._callbacks[target][events[i]].length; j < len2; ++j) {
+                    // If listener returns false, stop propagating
+                    if (false === this._callbacks[target][events[i]][j].apply(this, args)) {
+                        break;
+                    }
+                }
             }
         }
 
@@ -1013,11 +1533,11 @@ module.exports = EventSystem;
 
 
 /***/ }),
-/* 7 */
+/* 10 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
-var EventService = __webpack_require__(8);
+var EventService = __webpack_require__(11);
 
 /**
  * Events is an instance of EventService, giving an api for dealing with dom events.
@@ -1033,7 +1553,7 @@ module.exports = events;
 
 
 /***/ }),
-/* 8 */
+/* 11 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
@@ -1291,7 +1811,7 @@ module.exports = EventService;
 
 
 /***/ }),
-/* 9 */
+/* 12 */
 /***/ (function(module, exports) {
 
 /**
@@ -1614,79 +2134,148 @@ module.exports = new Client();
 
 
 /***/ }),
-/* 10 */
-/***/ (function(module, exports) {
+/* 13 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// Requirements
+var Route = __webpack_require__(19);
+var router = __webpack_require__(2);
+var history = __webpack_require__(20);
+var views = __webpack_require__(6);
+var View = __webpack_require__(7);
 
 /**
- * Collection turns an array into an observable array-like object.
+ * Page is an object in charge of rendering a view for all requests on a given route.
  *
  * @constructor
- * @param {array} source
- * @param {function} handler
- * @return {Collection}
+ * @param {object} config
+ * @return {Page}
  *
  * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
  * @package nucleon-js
  */
-var Collection = function (source, handler) {
-    for (var i = 0, len = source.length; i < len; ++i) {
-        this[i] = source[i];
-    }
-    this.length = source.length;
-    this._handler = handler;
-
-    return this;
+var Page = function (config) {
+    return this._build(config);
 };
 
-var arrayProto = Array.prototype;
+Page.prototype = {
 
-// Defining setters from Array prototype
-// Adding changes handler.
-var setters = {
-    'pop': 'remove', 'push': 'add', 'reverse': 'change', 'shift': 'remove',
-    'sort': 'change', 'splice': 'remove', 'unshift': 'add'
-};
-for (var method in setters) {
-    (function (method) {
-        Collection.prototype[method] = function () {
-            var event = setters[method];
-            var returnValue = arrayProto[method].apply(this, arguments);
-            var change;
-            if ('remove' === event || 'change' === event) {
-                change = returnValue;
-            } else if ('add' === event) {
-                change = arguments[1] ? arrayProto.slice.call(arguments) : arguments[0];
-            }
-            this._handler(event, change);
+    _fn: null,
+    _name: null,
+    _route: null,
+    _view: null,
 
-            return returnValue;
+    _build: function (config) {
+        if (!config.name) {
+            throw new Error('Page "'+config.name+'" must have a name.');
+        }
+        this._name = config.name;
+
+        if (!config.fn && !config.view) {
+            throw new Error('Page "'+config.name+'" must have a function or a view.');
+        }
+        if (config.fn && 'function' !== typeof config.fn) {
+            throw new Error('"fn" declared in page "'+config.name+'" is not a function.');
+        }
+        this._fn = config.fn || function () {
+            this.renderView();
         };
-    }(method));
-}
 
-// Defining getters from Array prototype
-var getters = [
-    'concat', 'every', 'filter', 'forEach', 'indexOf', 'join', 'lastIndexOf', 'map',
-    'reduce', 'reduceRight', 'slice', 'some', 'toLocaleString', 'toString'
-];
-for (var i = 0, len = getters.length; i < len; ++i) {
-    Collection.prototype[getters[i]] = arrayProto[getters[i]];
-}
+        if (!config.route) {
+            throw new Error('Page "'+config.name+'" must have a route.');
+        }
+        if ('string' === typeof config.route) {
+            config.route = {
+                path: config.route,
+                method: 'GET'
+            };
+        }
+        config.route.scheme = config.name;
+        config.route.name = config.route.name ? config.route.name : config.name;
+        this._route = new Route(config.route);
+        router.register(this._route);
 
-module.exports = Collection;
+        if (config.view) {
+            if (!(config.view instanceof View)) {
+                config.view = views.add(this._name+'_view', config.view);
+            }
+            this._view = config.view;
+        }
+
+        return this;
+    },
+
+    /**
+     * Get inner page view context.
+     */
+    getViewContext: function () {
+        if (!this._view) {
+            throw new Error(this._name+' page has no inner view. getViewContext() can not be called.');
+        }
+        return this._view._context;
+    },
+
+    /**
+     * Render inner page view.
+     *
+     * @param  {boolean} detached  defines if rendering is detached from auto-revocation
+     */
+    renderView: function (detached) {
+        if (!this._view) {
+            throw new Error(this._name+' page has no inner view. renderView() can not be called.');
+        }
+        views.render(this._name+'_view', detached);
+    },
+
+    /**
+     * Run page treatment.
+     */
+    run: function (request, storeInHistory) {
+        if (false !== storeInHistory) {
+            var self = this;
+            history.addEntry(request.getUrl(), function() {
+                self._fn.call(self, request);
+            });
+        }
+
+        this._fn.call(this, request);
+    }
+};
+
+module.exports = Page;
 
 
 /***/ }),
-/* 11 */
+/* 14 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
-var Page = __webpack_require__(17);
-var Request = __webpack_require__(23);
-var innerEvents = __webpack_require__(12);
-var router = __webpack_require__(1);
-var redirect = __webpack_require__(4);
-var channel = __webpack_require__(5);
+var EventService = __webpack_require__(11);
+
+/**
+ * InnerEvents is an instance of EventService used only by app components, giving an api for dealing with dom events.
+ *
+ * @return {EventService}
+ *
+ * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
+ * @package nucleon-js
+ */
+var innerEvents = new EventService();
+
+module.exports = innerEvents;
+
+
+/***/ }),
+/* 15 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// Requirements
+var Page = __webpack_require__(13);
+var Request = __webpack_require__(21);
+var innerEvents = __webpack_require__(14);
+var router = __webpack_require__(2);
+var redirect = __webpack_require__(5);
+var channel = __webpack_require__(8);
 
 /**
  * Pages is a container for Page instances.
@@ -1800,143 +2389,38 @@ module.exports = pages;
 
 
 /***/ }),
-/* 12 */
-/***/ (function(module, exports, __webpack_require__) {
-
-// Requirements
-var EventService = __webpack_require__(8);
-
-/**
- * InnerEvents is an instance of EventService used only by app components, giving an api for dealing with dom events.
- *
- * @return {EventService}
- *
- * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
- * @package nucleon-js
- */
-var innerEvents = new EventService();
-
-module.exports = innerEvents;
-
-
-/***/ }),
-/* 13 */
-/***/ (function(module, exports, __webpack_require__) {
-
-// Requirements
-var View = __webpack_require__(20);
-
-/**
- * Views is a container for View instances.
- *
- * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
- * @package nucleon-js
- */
-var views = new function () {
-
-    var storage = {};
-    var currentView = null;
-
-    /**
-     * Add a view in the app.
-     *
-     * @param {string} name
-     * @param {object} config
-     *
-     * @return {View}
-     */
-    this.add = function (name, config) {
-        if (undefined !== storage[name]) {
-            throw new Error('A view with the name "'+name+'" is already defined.');
-        }
-        storage[name] = new View(config);
-
-        return storage[name];
-    };
-
-    /**
-     * Get a view from the app.
-     *
-     * @param  {string} name
-     *
-     * @return {View}
-     */
-    this.get = function (name) {
-        if (undefined === storage[name]) {
-            throw new Error('No view with the name "'+name+'" could be found.');
-        }
-
-        return storage[name];
-    };
-
-    /**
-     * Render a view from the app.
-     *
-     * @param  {string}  name
-     * @param  {boolean} detached  defines if rendering is detached from auto-revocation
-     */
-    this.render = function (name, detached) {
-        if (undefined === storage[name]) {
-            throw new Error('No view with the name "'+name+'" could be found.');
-        }
-        if (true !== detached) {
-            if (currentView && currentView !== storage[name]) {
-                currentView.revoke();
-            }
-            currentView = storage[name];
-        }
-        storage[name].render();
-    };
-
-    /**
-     * Revoke a view from the app.
-     *
-     * @param  {string} name
-     */
-    this.revoke = function (name) {
-        if (undefined === storage[name]) {
-            throw new Error('No view with the name "'+name+'" could be found.');
-        }
-        if (currentView === storage[name]) {
-            currentView = undefined;
-        }
-        storage[name].revoke();
-    };
-};
-
-module.exports = views;
-
-
-/***/ }),
-/* 14 */
+/* 16 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
  * This is the main file building the nucleon app object.
  *
- * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
+ * .author  Kevin Marcachi <kevin.marcachi.gmail.com>
  * @package nucleon-js
- * @preserve
  */
 module.exports = {
-    channel: __webpack_require__(5),
-    events: __webpack_require__(7),
-    http: __webpack_require__(9),
-    memory: __webpack_require__(15),
-    models: __webpack_require__(16),
-    pages: __webpack_require__(11),
-    views: __webpack_require__(13),
-    redirect: __webpack_require__(4),
-    router: __webpack_require__(1),
+    channel: __webpack_require__(8),
+    Collection: __webpack_require__(3),
+    events: __webpack_require__(10),
+    http: __webpack_require__(12),
+    memory: __webpack_require__(17),
+    Model: __webpack_require__(1),
+    models: __webpack_require__(18),
+    Page: __webpack_require__(13),
+    pages: __webpack_require__(15),
+    View: __webpack_require__(7),
+    views: __webpack_require__(6),
+    redirect: __webpack_require__(5),
+    router: __webpack_require__(2),
 };
 
 
 /***/ }),
-/* 15 */
+/* 17 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
-var accessor = __webpack_require__(2);
+var accessor = __webpack_require__(4);
 
 /**
  * Memory offers an api for dealing with browser memory.
@@ -2021,11 +2505,11 @@ module.exports = new Memory();
 
 
 /***/ }),
-/* 16 */
+/* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
-var Model = __webpack_require__(3);
+var Model = __webpack_require__(1);
 
 /**
  * Models is a container for Model instances.
@@ -2074,113 +2558,7 @@ module.exports = models;
 
 
 /***/ }),
-/* 17 */
-/***/ (function(module, exports, __webpack_require__) {
-
-// Requirements
-var Route = __webpack_require__(18);
-var router = __webpack_require__(1);
-var history = __webpack_require__(19);
-var views = __webpack_require__(13);
-
-/**
- * Page is an object in charge of rendering a view for all requests on a given route.
- *
- * @constructor
- * @param {object} config
- * @return {Page}
- *
- * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
- * @package nucleon-js
- */
-var Page = function (config) {
-    return this._build(config);
-};
-
-Page.prototype = {
-
-    _fn: null,
-    _name: null,
-    _route: null,
-    _view: null,
-
-    _build: function (config) {
-        if (!config.name) {
-            throw new Error('Page "'+config.name+'" must have a name.');
-        }
-        this._name = config.name;
-
-        if (!config.fn) {
-            throw new Error('Page "'+config.name+'" must have a function.');
-        }
-        if ('function' !== typeof config.fn) {
-            throw new Error('"fn" declared in page "'+config.name+'" is not a function.');
-        }
-        this._fn = config.fn;
-
-        if (!config.route) {
-            throw new Error('Page "'+config.name+'" must have a route.');
-        }
-        if ('string' === typeof config.route) {
-            config.route = {
-                path: config.route,
-                method: 'GET'
-            };
-        }
-        config.route.scheme = config.name;
-        config.route.name = config.route.name ? config.route.name : config.name;
-        this._route = new Route(config.route);
-        router.register(this._route);
-
-        if (config.view) {
-            this._view = views.add(this._name+'_view', config.view);
-        }
-
-        return this;
-    },
-
-    /**
-     * Get inner page view context.
-     */
-    getViewContext: function () {
-        if (!this._view) {
-            throw new Error(this._name+' page has no inner view. getViewContext() can not be called.');
-        }
-        return this._view._context;
-    },
-
-    /**
-     * Render inner page view.
-     *
-     * @param  {boolean} detached  defines if rendering is detached from auto-revocation
-     */
-    renderView: function (detached) {
-        if (!this._view) {
-            throw new Error(this._name+' page has no inner view. renderView() can not be called.');
-        }
-        views.render(this._name+'_view', detached);
-    },
-
-    /**
-     * Run page treatment.
-     */
-    run: function (request, storeInHistory) {
-        if (false !== storeInHistory) {
-            var self = this;
-            history.addEntry(request.getUrl(), function() {
-                self._fn.call(self, request);
-            });
-        }
-
-        this._fn.call(this, request);
-    }
-};
-
-module.exports = Page;
-
-
-/***/ }),
-/* 18 */
+/* 19 */
 /***/ (function(module, exports) {
 
 /**
@@ -2380,12 +2758,12 @@ module.exports = Route;
 
 
 /***/ }),
-/* 19 */
+/* 20 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
-var innerEvents = __webpack_require__(12);
-var redirect = __webpack_require__(4);
+var innerEvents = __webpack_require__(14);
+var redirect = __webpack_require__(5);
 
 /**
  * History offers an api for adding url and callbacks in browser history.
@@ -2458,239 +2836,191 @@ module.exports = new History();
 
 
 /***/ }),
-/* 20 */
-/***/ (function(module, exports, __webpack_require__) {
-
-// Requirements
-var client = __webpack_require__(9);
-var DOMManipulator = __webpack_require__(0);
-var Fusioner = __webpack_require__(21);
-var Model = __webpack_require__(3);
-var router = __webpack_require__(1);
-
-/**
- * View instances give an api for rendering an element based on a given template and context.
- *
- * @constructor
- * @param {object} config
- * @return {View}
- *
- * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
- * @package nucleon-js
- */
-var View = function (config) {
-    this._buildConfig(config);
-
-    return this;
-};
-
-View.prototype = {
-
-    // Init vars
-    _root: null,
-    _template: null,
-    _templateUrl: null,
-    _context: null,
-    // Event callbacks
-    _onMounted: null,
-    _onRender: null,
-    _onRendered: null,
-    _onUpdate: null,
-    _onUpdated: null,
-    _onRevoke: null,
-    _onRevoked: null,
-    // Inner vars
-    _fusioner: null,
-    _rendered: false,
-
-    _buildConfig: function (config) {
-        for (var prop in config) {
-            if (null === this['_'+prop]) {
-                if ('context' === prop) {
-                    this['_'+prop] = this._buildContext(config[prop]);
-                } else {
-                    this['_'+prop] = config[prop];
-                }
-            } else {
-                this[prop] = config[prop];
-            }
-        }
-        if (!this._root) {
-            throw new Error('Root must be defined to construct a view.');
-        }
-        if (!this._context) {
-            this._context = this._buildContext({});
-        }
-    },
-
-    _buildContext: function (context) {
-        var prop;
-        var _context = {};
-        for (prop in context) {
-            if (false === context[prop] instanceof Model) {
-                _context[prop] = context[prop];
-                delete context[prop];
-            }
-        }
-        _context = new Model(_context);
-        for (prop in context) {
-            _context[prop] = context[prop];
-        }
-        // Adding routing method in context
-        _context.generateUrl = function (routeName, params, withHost) {
-            return router.generateUrl(routeName, params, withHost);
-        };
-
-        return _context;
-    },
-
-    _getRoot: function () {
-        if ('string' === typeof this._root) {
-            var root = DOMManipulator.first(this._root);
-            if (!root) {
-                throw new Error('Root element with selector "'+this._root+'" could not been found.');
-            }
-            this._root = root;
-        }
-
-        return this._root;
-    },
-
-    /**
-     * Insert view elements in the DOM.
-     */
-    render: function () {
-
-        var self = this;
-
-        // Template is not loaded
-        if (!this._template && this._templateUrl) {
-            // Try to download it synchronously if url provided
-            client.get(this._templateUrl, { t_ref: new Date().getTime() }, {
-                async: false,
-                success: function (template) {
-                    self._template = template;
-                },
-                error: function () {
-                    throw new Error('Template located in "'+self._templateUrl+'" could not be loaded.');
-                }
-            });
-        } else if (!this._template && !this._templateUrl) {
-            // Elsewise, use root instead
-            this._template = [this._getRoot()];
-        }
-
-        // Template is still a string value
-        if ('string' === typeof this._template) {
-            // Create html elements from string
-            this._template = DOMManipulator.createElement(this._template);
-            var elements = [];
-            if (this._template instanceof HTMLElement) {
-                elements.push(this._template);
-            } else if (this._template instanceof DocumentFragment) {
-                while (this._template.firstChild) {
-                    elements.push(this._template.removeChild(this._template.firstChild));
-                }
-            }
-            this._template = elements;
-        }
-
-        // Bind context to template if not done yet
-        if (!this._fusioner) {
-            var fusionerConfig = {
-                element: this._template,
-                context: this._context,
-                shouldApply: function () {
-                    return self._rendered;
-                }
-            };
-            // Call onUpdate callback
-            if ('function' === typeof self._onUpdate) {
-                fusionerConfig.onUpdate = function () {
-                    self._onUpdate();
-                };
-            }
-            // Call onUpdated callback
-            if ('function' === typeof self._onUpdated) {
-                fusionerConfig.onUpdated = function () {
-                    self._onUpdated();
-                };
-            }
-            this._fusioner = new Fusioner(fusionerConfig);
-        }
-
-        // Template is not rendered
-        if (!this._rendered) {
-            // Call onRender callback
-            if ('function' === typeof this._onRender) {
-                this._onRender();
-            }
-            // Insert elements
-            var root = this._getRoot();
-            if (this._template[0] !== root) {
-                DOMManipulator.insertElements(this._template, root);
-            } else {
-                DOMManipulator.putBackElement(root);
-            }
-            this._rendered = true;
-            // Call onRendered callback
-            if ('function' === typeof this._onRendered) {
-                this._onRendered();
-            }
-            this._fusioner.applyChanges();
-        }
-    },
-
-    /**
-     * Remove view elements from the DOM.
-     */
-    revoke: function () {
-        if (this._rendered) {
-            // Call onRevoke callback
-            if ('function' === typeof this._onRevoke) {
-                this._onRevoke();
-            }
-            var root = this._getRoot();
-            if (this._template[0] !== root) {
-                // Remove each elements
-                for (var i = 0, len = this._template.length; i < len; ++i) {
-                    DOMManipulator.removeElement(this._template[i]);
-                }
-            } else {
-                DOMManipulator.putAsideElement(root);
-            }
-            this._rendered = false;
-            // Call onRevoked callback
-            if ('function' === typeof this._onRevoked) {
-                this._onRevoked();
-            }
-        }
-    },
-
-    /**
-     * Get the view execution context
-     *
-     * @return {null|Model}
-     */
-    getContext: function () {
-        return this._context;
-    },
-};
-
-module.exports = View;
-
-
-/***/ }),
 /* 21 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // Requirements
-var accessor = __webpack_require__(2);
 var DOMManipulator = __webpack_require__(0);
-var events = __webpack_require__(7);
-var processor = __webpack_require__(22);
-var Model = __webpack_require__(3);
-var Collection = __webpack_require__(10);
+
+/**
+ * Request instance is an object containing all elements of a http request.
+ *
+ * @constructor
+ * @param {object} config
+ * @return {Request}
+ *
+ * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
+ * @package nucleon-js
+ */
+var Request = function (config) {
+    this._components = {};
+    this._query = {};
+    this._post = {};
+
+    return this._build(config);
+};
+
+Request.prototype = {
+
+    _event: null,
+    _protocol: null,
+    _host: null,
+    _port: null,
+    _path: null,
+    _url: null,
+    _method: null,
+    _hash: null,
+    _components: null,
+    _query: null,
+    _post: null,
+
+    _build: function (config) {
+        this._event = config.event;
+        var a = document.createElement('a');
+        a.href = config.event.target.action || config.event.target.href;
+        this._protocol = a.protocol.replace(':', '');
+        this._host = a.hostname;
+        this._port = parseInt(config.port);
+        if (isNaN(this._port)) {
+            this._port = parseInt(window.location.port.replace(':'));
+            if (isNaN(this._port)) {
+                this._port = 'https:' === window.location.protocol ? 443 : 80;
+            }
+        }
+        this._path = a.pathname.replace('//', '/');
+        this._url = a.href;
+        this._method = (config.event.target.method || 'GET').toUpperCase();
+        this._hash = a.hash;
+        if (config.route) {
+            this._components = config.route.extractParamsFromUrl(a.href);
+        }
+        if (a.search) {
+            this._query = JSON.parse('{"'+decodeURI(a.search.substring(1)).replace(/"/g, '\\"').replace(/&/g, '","').replace(/=/g,'":"')+'"}');
+        }
+        if ('FORM' === config.event.target.tagName.toUpperCase() && 'POST' === this._method) {
+            this._post = DOMManipulator.formToObject(config.event.target);
+        }
+
+        return this;
+    },
+
+    /**
+     * Get DOM event.
+     *
+     * @return Event
+     */
+    getEvent: function () {
+        return this._event;
+    },
+
+    /**
+     * Get uri scheme.
+     * @return {string}
+     */
+    getProtocol: function() {
+        return this._protocol;
+    },
+
+    /**
+     * Get uri host.
+     *
+     * @return {string}
+     */
+    getHost: function () {
+        return this._host;
+    },
+
+    /**
+     * Get uri path.
+     *
+     * @return {string}
+     */
+    getPath: function () {
+        return this._path;
+    },
+
+    /**
+     * Get requested url.
+     *
+     * @return {string}
+     */
+    getUrl: function () {
+        return this._url;
+    },
+
+    /**
+     * Get request port.
+     *
+     * @return {string}
+     */
+    getPort: function () {
+        return this._port;
+    },
+
+    /**
+     * Get request method.
+     *
+     * @return {string}
+     */
+    getMethod: function () {
+        return this._method;
+    },
+
+    /**
+     * Get hash in request.
+     *
+     * @return {string}
+     */
+    getHash: function () {
+        return this._hash;
+    },
+
+    /**
+     * Get uri components.
+     *
+     * @return {object}
+     */
+    getUriComponents: function () {
+        return this._components;
+    },
+
+    /**
+     * Get query parameters.
+     *
+     * @return {object}
+     */
+    getQueryParams: function () {
+        return this._query;
+    },
+
+    /**
+     * Get post parameters.
+     *
+     * @return {object}
+     */
+    getPostParams: function () {
+        return this._post;
+    }
+};
+
+module.exports = Request;
+
+
+/***/ }),
+/* 22 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// Requirements
+var accessor = __webpack_require__(4);
+var DOMManipulator = __webpack_require__(0);
+var events = __webpack_require__(10);
+var processor = __webpack_require__(23);
+var Model = __webpack_require__(1);
+var Collection = __webpack_require__(3);
+
+var MARKERS_PATTERN = /\{\{((?!\{\{|\}\}).)*\}\}/g;
+var DELIMITERS_PATTERN = /\{\{|\}\}/g;
+var PORTIONS_PATTERN = /[ |(|)|{|}|[|]|,|:|\+|"|']/g;
 
 /**
  * Fusioner instances create a binding between an html element and a context.
@@ -2706,16 +3036,18 @@ var Fusioner = function (config) {
     this._init = [];
     this._waiting = [];
     this._events = {};
-    if (false === config.element instanceof Array) {
-        config.element = [config.element];
+    if (false === config.elements instanceof Array) {
+        config.elements = [config.elements];
     }
-    this._element = config.element;
+    this._elements = config.elements;
     this._context = config.context;
+    this._view = config.view;
+    this._components = config.components;
     this._shouldApply = config.shouldApply;
     this._onUpdate = config.onUpdate;
     this._onUpdated = config.onUpdated;
-    for (var i = 0, len = this._element.length; i < len; ++i) {
-        this._bind(this._element[i]);
+    for (var i = this._elements.length - 1; i >= 0; --i) {
+        this._bind(this._elements[i]);
     }
 
     return this;
@@ -2723,23 +3055,24 @@ var Fusioner = function (config) {
 
 Fusioner.prototype = {
 
-    _element: null,
+    _elements: null,
     _context: null,
     _shouldApply: null,
+    _onUpdate: null,
+    _onUpdated: null,
     _init: null,
     _waiting: null,
     _events: null,
+    _view: null,
 
     _extractMarkers: function (string) {
         if (string) {
-            var MARKERS = /\{\{((?!\{\{|\}\}).)*\}\}/g;
-            var DELIMITERS = /\{\{|\}\}/g;
-            var markers = string.match(MARKERS);
+            var markers = string.match(MARKERS_PATTERN);
             if (markers && markers.length > 0) {
                 markers = markers.map(function (marker) {
                     return {
                         outer: marker,
-                        inner: marker.replace(DELIMITERS, '').trim()
+                        inner: marker.replace(DELIMITERS_PATTERN, '').trim()
                     };
                 });
                 return markers.length > 0 ? markers : [];
@@ -2750,8 +3083,11 @@ Fusioner.prototype = {
 
     _extractContextProperties: function (string) {
         var props = [];
-        var portions = string.split(/[ |(|)|{|}|[|]|,|:|\+|"|']/g); // TODO - Pourquoi avoir mis |"|', les valeurs entres guillements ne sont pas des références au context
+        var portions = string.split(PORTIONS_PATTERN);
         for (var i = 0, len = portions.length, fragments, model; i < len; ++i) {
+            if (!portions[i]) {
+                continue;
+            }
             fragments = portions[i].split('.');
             model = fragments.shift();
             if (undefined !== this._context[model]) {
@@ -2784,28 +3120,20 @@ Fusioner.prototype = {
     },
 
     _replaceAliasesInElement: function (element, aliases) {
-        var i;
-        var len;
         // HTMLElement
         if (1 === element.nodeType) {
-            if (element.getAttribute('data-no-bind')) {
-                return;
+            var i;
+            for (i = element.attributes.length - 1; i >= 0; --i) {
+                element.setAttribute(element.attributes[i].name, this._replaceAliases(element.attributes[i].value, aliases));
             }
-            if (element.attributes) {
-                for (i = 0, len = element.attributes.length; i < len; ++i) {
-                    element.setAttribute(element.attributes[i].name, this._replaceAliases(element.attributes[i].value, aliases));
-                }
+            // Recursive binding
+            for (i = element.childNodes.length - 1; i >= 0; --i) {
+                this._replaceAliasesInElement(element.childNodes[i], aliases);
             }
         // Text node
         } else if (3 === element.nodeType) {
             var contentProp = element.textContent ? 'textContent' : 'nodeValue'; // IE8 polyfill
             element[contentProp] = this._replaceAliases(element[contentProp], aliases);
-        }
-        // Recursive binding
-        if (element.childNodes && element.childNodes.length > 0) {
-            for (i = 0, len = element.childNodes.length; i < len; ++i) {
-                this._replaceAliasesInElement(element.childNodes[i], aliases);
-            }
         }
 
         return element;
@@ -2818,7 +3146,7 @@ Fusioner.prototype = {
     },
 
     _getPropPath: function (prop) {
-        return (prop.model ? prop.model+'.' : '')+prop.path;
+        return (prop.model ? prop.model + (prop.path ? '.': '') : '') + prop.path;
     },
 
     _on: function (event, prop, callback) {
@@ -2832,15 +3160,6 @@ Fusioner.prototype = {
             target.on(event, prop.path, function (newValue) {
                 self._dispatch(event, prop, newValue);
             });
-            // Add extra listeners if prop refers to a collection
-            if (accessor.getPropertyValue(this._context, propPath) instanceof Collection) {
-                target.on('add', prop.path, function (added) {
-                    self._dispatch(event, prop, added);
-                });
-                target.on('remove', prop.path, function (removed) {
-                    self._dispatch(event, prop, removed);
-                });
-            }
         }
         this._events[eventPath].push(callback);
     },
@@ -2871,8 +3190,100 @@ Fusioner.prototype = {
             // Elsewise, store them in a queue
             } else {
                 for (i = 0, len = this._events[eventPath].length; i < len; ++i) {
+                    if (this._waiting.indexOf(this._events[eventPath][i]) !== -1) {
+                        continue;
+                    }
                     this._waiting.push(this._events[eventPath][i]);
                 }
+            }
+        }
+    },
+
+    _createComponent: function (element, aliases, baseComponent, parentNode, position) {
+        var self = this;
+        // Build component base context
+        var name;
+        var context = {};
+        var baseComponentContext = baseComponent.getContext();
+        for (name in baseComponentContext) {
+            if ('on' === name || 'trigger' === name) {
+                continue;
+            }
+            context[name] = baseComponentContext[name];
+        }
+
+        // Import values to inject in it
+        var references;
+        var expr;
+        if (element.hasAttribute('data-context')) {
+            expr = element.getAttribute('data-context');
+            references = processor.process(expr, {}, false);
+            for (name in references) {
+                references[name] = this._replaceAliases(references[name], aliases);
+                context[name] = processor.process(references[name], this._context);
+            }
+        }
+
+        // Build context
+        context = new Model(context);
+
+        // Build component
+        var root = parentNode || element.parentNode || this._view._getRoot();
+        position = position || DOMManipulator.getPosition(element);
+        var component = baseComponent.clone({ context: context, root: root, position: position });
+
+        // Bind modification for shared properties
+        component._mount();
+        if (references) {
+            for (name in references) {
+                this._extractContextProperties(references[name] + '').forEach(function (prop) {
+                    // Component to view changes
+                    component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
+                        // Handle missing values (callback on queue)
+                        newValue = newValue || accessor.getPropertyValue(component._context, name);
+                        accessor.setPropertyValue(self._context, references[name], newValue);
+                    });
+                    // View to component changes
+                    self._on('change', prop, function (newValue) {
+                        // Handle missing values (callback on queue)
+                        newValue = newValue || accessor.getPropertyValue(self._context, references[name]);
+                        accessor.setPropertyValue(context, name, newValue);
+                    });
+                });
+            }
+        }
+
+        // Handle conditional rendering
+        if (element.hasAttribute('data-if')) {
+            expr = this._replaceAliases(element.getAttribute('data-if'), aliases);
+            var handleInsertion = function () {
+                var result = processor.process(expr, self._context);
+                if (undefined === result || false === result || null === result || '' === result) {
+                    component.revoke();
+                } else {
+                    component.render();
+                }
+            };
+            handleInsertion();
+            this._extractContextProperties(expr).forEach(function (prop) {
+                if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                    self._on('change', prop, handleInsertion);
+                }
+            });
+        } else {
+            component.render();
+        }
+
+        return component;
+    },
+
+    _removeElement: function (element) {
+        if (element.parentNode) {
+            DOMManipulator.removeElement(element);
+        } else {
+            var index = this._elements.indexOf(element);
+            if (-1 !== index) {
+                this._elements.splice(index, 1);
             }
         }
     },
@@ -2883,6 +3294,42 @@ Fusioner.prototype = {
             return;
         }
 
+        // HTMLElement
+        if (1 === element.nodeType) {
+
+            // No binding
+            if (element.hasAttribute('data-no-bind')) {
+                return;
+            }
+
+            var tagName = element.tagName.toLowerCase();
+
+            // Childs root
+            if ('child-views' === tagName) {
+                this._view._childsRoot = element.parentNode || this._view._getRoot();
+                this._view._childsPosition = DOMManipulator.getPosition(element);
+                this._removeElement(element);
+                return;
+            }
+
+            // Component
+            if (this._components && this._components[tagName]) {
+                return this._bindComponent(element, aliases, tagName);
+            }
+
+            // Other
+            return this._bindElement(element, aliases, tagName);
+
+        // TextNode
+        } else if (3 === element.nodeType) {
+            return this._bindTextNode(element, aliases);
+        }
+
+        return element;
+    },
+
+    _bindElement: function (element, aliases, tagName) {
+
         var self = this;
         var attr;
         var prop;
@@ -2890,371 +3337,455 @@ Fusioner.prototype = {
         var eventName;
         var i;
         var len;
-        var name;
-        var content;
-        var markers;
 
-        // HTMLElement
-        if (1 === element.nodeType) {
+        // Loop
+        if (element.hasAttribute('data-for')) {
 
-            if (element.getAttribute('data-no-bind')) {
-                return;
+            // Set up base values
+            attr = element.getAttribute('data-for');
+            aliases = aliases || {};
+            var alias = attr.replace(/in .*/, '').trim();
+            var key = null;
+            if (alias.indexOf(',') !== -1) {
+                alias = alias.split(',');
+                key = alias[0].trim();
+                alias = alias[1].trim();
+            }
+            var expr = this._replaceAliases(attr.replace(/.* in/, '').trim(), aliases);
+            var props = this._extractContextProperties(expr);
+            propPath = props.length ? this._getPropPath(props[0]) : null;
+
+            // Save data needed for insertion of loop elements.
+            var parent = element.parentNode || this._view._getRoot();
+            var position = DOMManipulator.getPosition(element);
+
+            // Put element aside. Will be used as a model for loop elements.
+            this._removeElement(element);
+            element.removeAttribute('data-for');
+
+            var iterable = processor.process(expr, this._context);
+            if (false === this._isIterable(iterable)) {
+                throw new Error(expr+' is an invalid expression for a loop.');
             }
 
-            // Loop
-            if ((attr = element.getAttribute('data-for'))) {
+            var nodes = [];
 
-                // Set up base values
-                aliases = aliases || {};
-                var alias = attr.replace(/in .*/, '').trim();
-                var key = null;
-                if (alias.indexOf(',') !== -1) {
-                    alias = alias.split(',');
-                    key = alias[0].trim();
-                    alias = alias[1].trim();
-                }
-                var expr = attr.replace(/.* in/, '').trim();
-                var props = this._extractContextProperties(expr, aliases);
-
-                // Save data needed for insertion of loop elements.
-                var parent = element.parentNode;
-                var position = DOMManipulator.getPosition(element);
-                // Put element aside. Will be used as a model for loop elements.
-                DOMManipulator.removeElement(element);
-                element.removeAttribute('data-for');
-
-                var iterable = processor.process(expr, this._context);
-                if (undefined === iterable) {
-                    throw new Error(expr+' is an invalid expression for a loop.');
-                }
-                var nodes = [];
-
-                // For i in collection length
-                if (iterable instanceof Collection) {
-                    prop = props[0];
-                    propPath = this._getPropPath(prop);
-                    var oldCollection = [];
-                    var handleLoopForCollection = function (newCollection) {
-                        newCollection = newCollection || accessor.getPropertyValue(self._context, propPath);
-                        var i, j, len, len2;
+            // For i in collection length
+            if (iterable instanceof Collection) {
+                var handleLoopForCollection = function (newCollection) {
+                    var i;
+                    var len;
+                    newCollection = newCollection || accessor.getPropertyValue(self._context, propPath);
+                    if (newCollection.length > nodes.length) {
                         var newNode;
                         var newNodes = [];
-                        var newIndexes = [];
-                        var changedIndexes = [];
-                        var removedIndexes = [];
-                        var eventPath;
-                        // Nodes operations. Compare old and new collection items
-                        for (i = 0, len = newCollection.length; i < len; ++i) {
-                            // Same item in old and new collection, do nothing
-                            if (oldCollection[i] === newCollection[i]) {
-                                continue;
+                        for (i = nodes.length, len = newCollection.length; i < len; ++i) {
+                            aliases[alias] = propPath+'.'+i;
+                            if (key) {
+                                aliases[key] = i+'';
                             }
-                            // New item, create a node
-                            if (!oldCollection[i]) {
-                                newNode = element.cloneNode(true);
-                                newNodes.push(newNode);
-                                newIndexes.push(i);
-                                nodes.push(newNode);
-                            // Item changed, save its index for calling an update in listeners operations
-                            } else {
-                                changedIndexes.push(i);
-                            }
-                        }
-                        if (oldCollection.length > newCollection.length) {
-                            // Remove nodes no longer needed
-                            for (i = oldCollection.length - 1, len = newCollection.length - 1; i > len; --i) {
-                                DOMManipulator.removeElement(nodes[i]);
-                                nodes.splice(i, 1);
-                                // Save its index for removing listener in listeners operations
-                                removedIndexes.push(i);
-                            }
-                        } else {
-                            // Insert and bind new nodes
-                            DOMManipulator.insertElements(newNodes, parent, position + (nodes.length - newNodes.length));
-                            for (i = 0, len = newIndexes.length; i < len; ++i) {
-                                aliases[alias] = propPath+'.'+newIndexes[i];
-                                if (key) {
-                                    aliases[key] = newIndexes[i]+'';
-                                }
-                                self._bind(self._replaceAliasesInElement(nodes[newIndexes[i]], aliases), aliases);
-                            }
-                        }
-                        // Listeners operations
-                        if (changedIndexes.length || removedIndexes.length) {
-                            // TODO - prop.1 matches prop.[10]
-                            var changedPropPaths = changedIndexes.length ? new RegExp('^'+propPath+'\\.(?:'+changedIndexes.join('|')+')\\.') : null;
-                            var removedPropPaths = removedIndexes.length ? new RegExp('^'+propPath+'\\.(?:'+removedIndexes.join('|')+')\\.') : null;
-                            for (eventPath in self._events) {
-                                // Remove listeners no longer needed
-                                if (removedPropPaths && removedPropPaths.test(eventPath)) {
-                                    self._events[eventPath] = [];
-                                }
-                                // Trigger listeners related to updated nodes
-                                if (changedPropPaths && changedPropPaths.test(eventPath)) {
-                                    for (j = 0, len2 = self._events[eventPath].length; j < len2; ++j) {
-                                        self._events[eventPath][j]();
-                                    }
-                                }
-                            }
-                        }
-                        oldCollection = newCollection.slice(0);
-                    };
-                    this._on('change', prop, function () { handleLoopForCollection(); });
-                    handleLoopForCollection(iterable);
+                            newNode = element.cloneNode(true);
+                            nodes.push(newNode);
+                            newNodes.push(newNode);
 
-                // For name in object
-                } else if (iterable instanceof Object) {
-                    var propNames = [];
+                            self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
+                        }
+                        DOMManipulator.insertElements(newNodes, parent, position + (nodes.length - newNodes.length));
+                    } else if (newCollection.length < nodes.length) {
+                        for (i = nodes.length, len = newCollection.length; i >= len; --i) {
+                            DOMManipulator.removeElement(nodes[i]);
+                            nodes.splice(i, 1);
+                        }
+                    }
+                };
+                handleLoopForCollection(iterable);
+                this._on('change', props[0], handleLoopForCollection);
+
+            // For name in object
+            } else if (iterable instanceof Object) {
+                var updateLoopForObject = function (newObject) {
+                    for (var i = nodes.length - 1; i >= 0; --i) {
+                        DOMManipulator.removeElement(nodes[i]);
+                        nodes.splice(i, 1);
+                    }
+                    newObject = newObject || accessor.getPropertyValue(self._context, propPath);
+                    var newNode;
                     for (var propName in iterable) {
-                        if (!iterable.hasOwnProperty(propName) || typeof iterable[propName] === 'function') {
+                        if (!newObject.hasOwnProperty(propName) || 'function' === typeof newObject[propName]) {
                             continue;
                         }
-                        propNames.push(propName);
-                        nodes.push(element.cloneNode(true));
+                        if (key) {
+                            aliases[key] = '"'+propName+'"';
+                            aliases[alias] = propPath+'.'+propName;
+                        } else {
+                            aliases[alias] = '"'+propName+'"';
+                        }
+                        newNode = element.cloneNode(true);
+                        self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
+                        nodes.push(newNode);
                     }
                     DOMManipulator.insertElements(nodes, parent, position);
-                    for (i = 0, len = nodes.length; i < len; ++i) {
-                        if (key) {
-                            aliases[key] = '"'+propNames[i]+'"';
-                            aliases[alias] = expr+'.'+propNames[i];
-                        } else {
-                            aliases[alias] = '"'+propNames[i]+'"';
-                        }
-                        self._bind(self._replaceAliasesInElement(nodes[i], aliases), aliases);
+                };
+                updateLoopForObject(iterable);
+                if (props.length) {
+                    this._on('change', props[0], updateLoopForObject);
+                }
+
+            // For i in number
+            } else if ('number' === typeof iterable) {
+                var oldNumber = 0;
+                var handleLoopForNumber = function (number) {
+                    number = number || processor.process(expr, self._context);
+                    if (number === oldNumber) {
+                        return;
                     }
-
-                // For i in number
-                } else if ('number' === typeof iterable) {
-                    var oldNumber = 0;
-                    var handleLoopForNumber = function (number) {
-                        number = number || processor.process(expr, self._context);
-                        if (number === oldNumber) {
-                            return;
+                    var i, len;
+                    var newNode;
+                    var newNodes = [];
+                    if (number > oldNumber) {
+                        for (i = oldNumber; i < number; ++i) {
+                            newNode = element.cloneNode(true);
+                            newNodes.push(newNode);
+                            nodes.push(newNode);
                         }
-                        var i, len;
-                        var newNode;
-                        var newNodes = [];
-                        if (number > oldNumber) {
-                            for (i = oldNumber; i < number; ++i) {
-                                newNode = element.cloneNode(true);
-                                newNodes.push(newNode);
-                                nodes.push(newNode);
-                            }
-                            DOMManipulator.insertElements(newNodes, parent, position);
-                            for (i = 0, len = newNodes.length; i < len; ++i) {
-                                aliases[alias] = (oldNumber+i)+'';
-                                self._bind(self._replaceAliasesInElement(newNodes[i], aliases), aliases);
-                            }
-                        } else {
-                            for (i = oldNumber; i >= number; --i) {
-                                DOMManipulator.removeElement(nodes[i]);
-                                nodes.splice(i, 1);
-                            }
+                        DOMManipulator.insertElements(newNodes, parent, position);
+                        for (i = 0, len = newNodes.length; i < len; ++i) {
+                            aliases[alias] = (oldNumber+i)+'';
+                            self._bind(self._replaceAliasesInElement(newNodes[i], aliases), aliases);
                         }
-                        oldNumber = number;
-                    };
-                    if (props.length > 0) {
-                        for (i = 0, len = props.length; i < len; ++i) {
-                            this._on('change', props[i], function () { handleLoopForNumber(); });
-                        }
-                    }
-                    handleLoopForNumber(iterable);
-                }
-
-                return;
-            }
-
-            // Two-way data binding
-            if ((attr = element.getAttribute('data-bind'))) {
-                prop = this._extractContextProperties(attr);
-                if (0 === prop.length) {
-                    throw new Error('Data-bind with value "'+attr+'" refers to a non existing context property.');
-                }
-
-                prop = prop[0];
-                propPath = this._getPropPath(prop);
-
-                var tagName = element.tagName.toLowerCase();
-                var updateValue;
-                if ('select' === tagName || ('input' === tagName && ('radio' === element.type || 'checkbox' === element.type))) {
-                    // Set up value. Update in case of outer changes
-                    updateValue = function (newValue) {
-                        newValue = newValue || accessor.getPropertyValue(self._context, propPath);
-                        if ('radio' === element.type || 'checkbox' === element.type) {
-                            if (newValue === true || newValue === element.value) {
-                                element.checked = 'checked';
-                            } else {
-                                element.checked = '';
-                            }
-                        } else {
-                            element.value = newValue;
-                        }
-                    };
-                    self._init.push(function () {
-                        updateValue(accessor.getPropertyValue(self._context, propPath));
-                    });
-                    this._on('change', prop, updateValue);
-                    // Trigger model in case of inner change
-                    events.on('change', element, function (e) {
-                        var target = e.target || e.srcElement;
-                        var value = target.value;
-                        if ('radio' === element.type || 'checkbox' === element.type) {
-                            if ('checkbox' === target.type && 'on' === value) {
-                                value = target.checked ? true : false;
-                            } else {
-                                value = target.checked ? value : null;
-                            }
-                        }
-                        self._trigger('change', prop, value);
-                    });
-
-                } else if ('textarea' === tagName || 'input' === tagName){
-                    // Set up value. Update in case of outer changes
-                    updateValue = function (newValue) {
-                        newValue = newValue || accessor.getPropertyValue(self._context, propPath);
-                        element.value = newValue || '';
-                    };
-                    updateValue(accessor.getPropertyValue(this._context, propPath));
-                    this._on('change', prop, updateValue);
-                    // Trigger model in case of inner change
-                    eventName = 'oninput' in element ? 'input' : 'keyup, keypress';
-                    events.on(eventName, element, function (e) {
-                        var target = e.target || e.srcElement;
-                        self._trigger('change', prop, target.value);
-                    });
-                }
-            }
-
-            // Events
-            if ((attr = element.getAttribute('data-events'))) {
-                var dataEvents = attr.split(';');
-                var components;
-                var callback;
-                for (i = 0, len = dataEvents.length; i < len; ++i) {
-                    components = dataEvents[i].split(':');
-                    if (components.length === 2) {
-                        eventName = components[0].trim();
-                        callback = components[1].trim();
-                        events.on(eventName, element, function (e) {
-                            self._context.e = e;
-                            processor.process(callback, self._context);
-                        });
-                    }
-                }
-                element.removeAttribute('data-events');
-            }
-
-            // Conditional insertion
-            if ((attr = element.getAttribute('data-if'))) {
-                (function (attr) {
-                    var handleInsertion = function () {
-                        var result = processor.process(attr, self._context);
-                        if (undefined === result || false === result || null === result || '' === result) {
-                            DOMManipulator.putAsideElement(element);
-                        } else {
-                            DOMManipulator.putBackElement(element);
-                        }
-                    };
-                    // Wait for the element to be inserted before evaluating its insertion
-                    if (!element.parentNode) {
-                        self._init.push(handleInsertion);
                     } else {
-                        handleInsertion();
+                        for (i = oldNumber; i >= number; --i) {
+                            DOMManipulator.removeElement(nodes[i]);
+                            nodes.splice(i, 1);
+                        }
                     }
-                    self._extractContextProperties(attr).forEach(function (prop) {
-                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                            self._on('change', prop, handleInsertion);
-                        }
-                    });
-                }(attr));
-                element.removeAttribute('data-if');
-            }
-
-            // Conditional displaying
-            if ((attr = element.getAttribute('data-show'))) {
-                (function (attr) {
-                    var handleDisplaying = function () {
-                        var result = processor.process(attr, self._context);
-                        if (undefined === result || false === result || null === result || '' === result) {
-                            element.style.display = 'none';
-                        } else {
-                            element.style.display = '';
-                        }
-                    };
-                    handleDisplaying();
-                    self._extractContextProperties(attr).forEach(function (prop) {
-                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                            self._on('change', prop, handleDisplaying);
-                        }
-                    });
-                }(attr));
-                element.removeAttribute('data-show');
-            }
-
-            // Left attributes
-            if (element.attributes) {
-                for (i = 0, len = element.attributes.length; i < len; ++i) {
-                    name = element.attributes[i].name;
-                    content = element.attributes[i].value;
-                    if (content) {
-                        markers = self._extractMarkers(content);
-                        if (markers.length > 0) {
-                            (function (name, content, markers) {
-                                var updateAttribute = function () {
-                                    var newContent = content;
-                                    for (var i = 0, len = markers.length; i < len; ++i) {
-                                        newContent = newContent.replace(markers[i].outer, self._evaluateText(markers[i].inner));
-                                    }
-                                    element.setAttribute(name, newContent);
-                                };
-                                updateAttribute();
-                                markers.forEach(function (marker) {
-                                    self._extractContextProperties(marker.inner).forEach(function (prop) {
-                                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                                            self._on('change', prop, updateAttribute);
-                                        }
-                                    });
-                                });
-                            }(name, content, markers));
-                        }
+                    oldNumber = number;
+                };
+                if (props.length > 0) {
+                    for (i = 0, len = props.length; i < len; ++i) {
+                        this._on('change', props[i], function () { handleLoopForNumber(); });
                     }
                 }
+                handleLoopForNumber(iterable);
             }
 
-        // TextNode
-        } else if (3 === element.nodeType) {
-            var contentProp = element.textContent ? 'textContent' : 'nodeValue'; // IE8 polyfill
-            content = element[contentProp].trim();
-            if (content) {
-                markers = this._extractMarkers(content);
-                if (markers.length > 0) {
-                    var updateContent = function () {
-                        var newContent = content;
-                        for (var i = 0, len = markers.length; i < len; ++i) {
-                            newContent = newContent.replace(markers[i].outer, self._evaluateText(markers[i].inner));
+            return;
+        }
+
+        // Two-way data binding
+        if (element.hasAttribute('data-bind')) {
+            attr = element.getAttribute('data-bind');
+            prop = this._extractContextProperties(attr);
+            if (0 === prop.length) {
+                throw new Error('Data-bind with value "'+attr+'" refers to a non existing context property.');
+            }
+
+            prop = prop[0];
+            propPath = this._getPropPath(prop);
+
+            var updateValue;
+            if ('select' === tagName || ('input' === tagName && ('radio' === element.type || 'checkbox' === element.type))) {
+                // Set up value. Update in case of outer changes
+                updateValue = function (newValue) {
+                    newValue = newValue || accessor.getPropertyValue(self._context, propPath);
+                    if ('radio' === element.type || 'checkbox' === element.type) {
+                        if (newValue === true || newValue === element.value) {
+                            element.checked = 'checked';
+                        } else {
+                            element.checked = '';
                         }
-                        element[contentProp] = newContent;
-                    };
-                    updateContent();
-                    for (i = 0, len = markers.length; i < len; ++i) {
-                        this._extractContextProperties(markers[i].inner).forEach(function (prop) {
-                            if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                                self._on('change', prop, updateContent);
-                            }
-                        });
+                    } else {
+                        element.value = newValue;
+                    }
+                };
+                self._init.push(function () {
+                    updateValue(accessor.getPropertyValue(self._context, propPath));
+                });
+                this._on('change', prop, updateValue);
+                // Trigger model in case of inner change
+                events.on('change', element, function (e) {
+                    var target = e.target || e.srcElement;
+                    var value = target.value;
+                    if ('radio' === element.type || 'checkbox' === element.type) {
+                        if ('checkbox' === target.type && 'on' === value) {
+                            value = target.checked ? true : false;
+                        } else {
+                            value = target.checked ? value : null;
+                        }
+                    }
+                    self._trigger('change', prop, value);
+                });
+
+            } else if ('textarea' === tagName || 'input' === tagName){
+                // Set up value. Update in case of outer changes
+                updateValue = function (newValue) {
+                    newValue = newValue || accessor.getPropertyValue(self._context, propPath);
+                    element.value = null !== newValue ? newValue : '';
+                };
+                updateValue(accessor.getPropertyValue(this._context, propPath));
+                this._on('change', prop, updateValue);
+                // Trigger model in case of inner change
+                eventName = 'oninput' in element ? 'input' : 'keyup, keypress';
+                events.on(eventName, element, function (e) {
+                    var target = e.target || e.srcElement;
+                    self._trigger('change', prop, target.value);
+                });
+            }
+            element.removeAttribute('data-bind');
+        }
+
+        // Events
+        if (element.hasAttribute('data-events')) {
+            var dataEvents = element.getAttribute('data-events').split(';');
+            var components;
+            var callback;
+            for (i = 0, len = dataEvents.length; i < len; ++i) {
+                components = dataEvents[i].split(':');
+                if (components.length === 2) {
+                    eventName = components[0].trim();
+                    callback = components[1].trim();
+                    events.on(eventName, element, function (e) {
+                        self._context.e = e;
+                        processor.process(callback, self._context);
+                    });
+                }
+            }
+            element.removeAttribute('data-events');
+        }
+
+        // Conditional insertion
+        if (element.hasAttribute('data-if')) {
+            (function (attr) {
+                var handleInsertion = function () {
+                    var result = processor.process(attr, self._context);
+                    if (undefined === result || false === result || null === result || '' === result) {
+                        DOMManipulator.putAsideElement(element);
+                    } else {
+                        DOMManipulator.putBackElement(element);
+                    }
+                };
+                // Wait for the element to be inserted before evaluating its insertion
+                if (!element.parentNode) {
+                    self._init.push(handleInsertion);
+                } else {
+                    handleInsertion();
+                }
+                self._extractContextProperties(attr).forEach(function (prop) {
+                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                        self._on('change', prop, handleInsertion);
+                    }
+                });
+            }(element.getAttribute('data-if')));
+            element.removeAttribute('data-if');
+        }
+
+        // Conditional displaying
+        if (element.hasAttribute('data-show')) {
+            (function (attr) {
+                var handleDisplaying = function () {
+                    var result = processor.process(attr, self._context);
+                    if (undefined === result || false === result || null === result || '' === result) {
+                        element.style.display = 'none';
+                    } else {
+                        element.style.display = '';
+                    }
+                };
+                handleDisplaying();
+                self._extractContextProperties(attr).forEach(function (prop) {
+                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                        self._on('change', prop, handleDisplaying);
+                    }
+                });
+            }(element.getAttribute('data-show')));
+            element.removeAttribute('data-show');
+        }
+
+        // Left attributes
+        if (element.attributes) {
+            var name;
+            var content;
+            var markers;
+            for (i = 0, len = element.attributes.length; i < len; ++i) {
+                name = element.attributes[i].name;
+                content = element.attributes[i].value;
+                if (content) {
+                    markers = self._extractMarkers(content);
+                    if (markers.length > 0) {
+                        (function (name, content, markers) {
+                            var updateAttribute = function () {
+                                var newContent = content;
+                                for (var i = 0, len = markers.length; i < len; ++i) {
+                                    newContent = newContent.replace(markers[i].outer, self._evaluateText(markers[i].inner));
+                                }
+                                element.setAttribute(name, newContent);
+                            };
+                            updateAttribute();
+                            markers.forEach(function (marker) {
+                                self._extractContextProperties(marker.inner).forEach(function (prop) {
+                                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                                        self._on('change', prop, updateAttribute);
+                                    }
+                                });
+                            });
+                        }(name, content, markers));
                     }
                 }
             }
         }
 
         // Recursive binding
-        if (element.childNodes && element.childNodes.length > 0) {
-            for (i = 0, len = element.childNodes.length; i < len; ++i) {
-                this._bind(element.childNodes[i], aliases);
+        for (i = element.childNodes.length - 1; i >= 0; --i) {
+            this._bind(element.childNodes[i], aliases);
+        }
+    },
+
+    _bindTextNode: function (element, aliases) {
+        var contentProp = element.textContent ? 'textContent' : 'nodeValue'; // IE8 polyfill
+        var content = element[contentProp].trim();
+        if (content) {
+            content = this._replaceAliases(content, aliases);
+            var markers = this._extractMarkers(content);
+            if (markers.length > 0) {
+                var self = this;
+                var updateContent = function () {
+                    var newContent = content;
+                    for (var i = 0, len = markers.length; i < len; ++i) {
+                        newContent = newContent.replace(markers[i].outer, self._evaluateText(markers[i].inner));
+                    }
+                    element[contentProp] = newContent;
+                };
+                updateContent();
+                for (var i = 0, len = markers.length; i < len; ++i) {
+                    this._extractContextProperties(markers[i].inner).forEach(function (prop) {
+                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                            self._on('change', prop, updateContent);
+                        }
+                    });
+                }
             }
         }
+    },
 
-        return element;
+    _bindComponent: function (element, aliases, tagName) {
+        var self = this;
+        var parentNode = element.parentNode || this._view._getRoot();
+        this._removeElement(element);
+
+        // Loop
+        if (element.hasAttribute('data-for')) {
+
+            aliases = aliases || {};
+
+            var attr = element.getAttribute('data-for');
+            var alias = attr.replace(/in .*/, '').trim();
+            var key = null;
+            if (alias.indexOf(',') !== -1) {
+                alias = alias.split(',');
+                key = alias[0].trim();
+                alias = alias[1].trim();
+            }
+
+            var expr = this._replaceAliases(attr.replace(/.* in/, '').trim(), aliases);
+            var iterable = processor.process(expr, this._context);
+            if (false === this._isIterable(iterable)) {
+                throw new Error(expr+' is an invalid expression for a loop.');
+            }
+
+            var props = this._extractContextProperties(expr);
+            var propPath = props.length ? this._getPropPath(props[0]) : null;
+
+            var components = [];
+
+            // For i in collection length
+            if (iterable instanceof Collection) {
+                var updateComponentsForCollection = function (newCollection) {
+                    newCollection = newCollection || accessor.getPropertyValue(self._context, propPath);
+                    var i;
+                    var len;
+                    // New collection longer than old collection
+                    if (newCollection.length > components.length) {
+                        for (i = components.length, len = newCollection.length; i < len; ++i) {
+                            aliases[alias] = propPath+'.'+i;
+                            if (key) {
+                                aliases[key] = i+'';
+                            }
+                            components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
+                        }
+                    // New collection smaller than old collection
+                    } else {
+                        for (i = components.length - 1, len = newCollection.length - 1; i > len; --i) {
+                            components[i].revoke();
+                            components.splice(i, 1)[0] = null;
+                        }
+                    }
+                };
+                updateComponentsForCollection(iterable);
+                this._on('change', props[0], updateComponentsForCollection);
+
+            // For prop name in object
+            } else if (iterable instanceof Object) {
+                var updateComponentForObject = function (newObject) {
+                    for (var i = components.length - 1; i >= 0; --i) {
+                        components[i].revoke();
+                        components.splice(i, 1)[0] = null;
+                    }
+                    newObject = newObject || accessor.getPropertyValue(self._context, propPath);
+                    for (var propName in iterable) {
+                        if (!newObject.hasOwnProperty(propName) || 'function' === typeof newObject[propName]) {
+                            continue;
+                        }
+                        if (key) {
+                            aliases[key] = '"'+propName+'"';
+                            aliases[alias] = propPath+'.'+propName;
+                        } else {
+                            aliases[alias] = '"'+propName+'"';
+                        }
+                        components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
+                    }
+                };
+                updateComponentForObject(iterable);
+                if (props.length) {
+                    this._on('change', props[0], updateComponentForObject);
+                }
+
+            // For i in number
+            } else if ('number' === typeof iterable) {
+                var updateComponentForNumber = function (newNumber) {
+                    newNumber = newNumber || processor.process(expr, self._context);
+                    var i;
+                    if (newNumber > components.length) {
+                        for (i = components.length; i < newNumber; ++i) {
+                            aliases[alias] = i+'';
+                            components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
+                        }
+                    } else if (newNumber < components.length) {
+                        for (i = components.length - 1; i > newNumber; --i) {
+                            components[i].revoke();
+                            components.splice(i, 1)[0] = null;
+                        }
+                    }
+                };
+                updateComponentForNumber(iterable);
+                if (props.length === 1) {
+                    this._on('change', props[0], updateComponentForNumber);
+                } else if (props.length > 1) {
+                    for (var i = props.length - 1; i >= 0; --i) {
+                        this._on('change', props[i], function () {
+                            updateComponentForNumber(); // Don't pass value, which rely on multiple context values. Force recalculate.
+                        });
+                    }
+                }
+            }
+
+            return;
+        }
+
+        // Single
+        this._createComponent(element, aliases, this._components[tagName], parentNode);
+    },
+
+    _isIterable: function (thing) {
+        return true === thing instanceof Collection || true === thing instanceof Object || 'number' === typeof thing;
     },
 
     /**
@@ -3290,7 +3821,7 @@ module.exports = Fusioner;
 
 
 /***/ }),
-/* 22 */
+/* 23 */
 /***/ (function(module, exports) {
 
 /**
@@ -3377,8 +3908,8 @@ var ExprEvaluator = function () {
      *
      * @return {mixed}
      */
-    this.process = function (expr, context) {
-
+    this.process = function (expr, context, replaceUndefined) {
+        replaceUndefined = undefined === replaceUndefined ? true : replaceUndefined;
         index = 0;
         components = [''];
         inSingleQuote = false;
@@ -3443,7 +3974,7 @@ var ExprEvaluator = function () {
         function accessProperty (path, params) {
             var fragments = path.split('.');
             if (!context || undefined === context[fragments[0]]) {
-                return undefined;
+                return replaceUndefined ? undefined : path;
             }
             var target = context;
             var owner = target;
@@ -3454,7 +3985,7 @@ var ExprEvaluator = function () {
                     owner = target;
                     target = target[fragments[i]];
                 } else {
-                    return undefined;
+                    return replaceUndefined ? undefined : path;
                 }
             }
             if (typeof target === 'function') {
@@ -3679,177 +4210,6 @@ var ExprEvaluator = function () {
 };
 
 module.exports = new ExprEvaluator();
-
-
-/***/ }),
-/* 23 */
-/***/ (function(module, exports, __webpack_require__) {
-
-// Requirements
-var DOMManipulator = __webpack_require__(0);
-
-/**
- * Request instance is an object containing all elements of a http request.
- *
- * @constructor
- * @param {object} config
- * @return {Request}
- *
- * @author  Kevin Marcachi <kevin.marcachi@gmail.com>
- * @package nucleon-js
- */
-var Request = function (config) {
-    this._components = {};
-    this._query = {};
-    this._post = {};
-
-    return this._build(config);
-};
-
-Request.prototype = {
-
-    _event: null,
-    _protocol: null,
-    _host: null,
-    _port: null,
-    _path: null,
-    _url: null,
-    _method: null,
-    _hash: null,
-    _components: null,
-    _query: null,
-    _post: null,
-
-    _build: function (config) {
-        this._event = config.event;
-        var a = document.createElement('a');
-        a.href = config.event.target.action || config.event.target.href;
-        this._protocol = a.protocol.replace(':', '');
-        this._host = a.hostname;
-        this._port = parseInt(config.port);
-        if (isNaN(this._port)) {
-            this._port = parseInt(window.location.port.replace(':'));
-            if (isNaN(this._port)) {
-                this._port = 'https:' === window.location.protocol ? 443 : 80;
-            }
-        }
-        this._path = a.pathname.replace('//', '/');
-        this._url = a.href;
-        this._method = (config.event.target.method || 'GET').toUpperCase();
-        this._hash = a.hash;
-        if (config.route) {
-            this._components = config.route.extractParamsFromUrl(a.href);
-        }
-        if (a.search) {
-            this._query = JSON.parse('{"'+decodeURI(a.search.substring(1)).replace(/"/g, '\\"').replace(/&/g, '","').replace(/=/g,'":"')+'"}');
-        }
-        if ('FORM' === config.event.target.tagName.toUpperCase() && 'POST' === this._method) {
-            this._post = DOMManipulator.formToObject(config.event.target);
-        }
-
-        return this;
-    },
-
-    /**
-     * Get DOM event.
-     *
-     * @return Event
-     */
-    getEvent: function () {
-        return this._event;
-    },
-
-    /**
-     * Get uri scheme.
-     * @return {string}
-     */
-    getProtocol: function() {
-        return this._protocol;
-    },
-
-    /**
-     * Get uri host.
-     *
-     * @return {string}
-     */
-    getHost: function () {
-        return this._host;
-    },
-
-    /**
-     * Get uri path.
-     *
-     * @return {string}
-     */
-    getPath: function () {
-        return this._path;
-    },
-
-    /**
-     * Get requested url.
-     *
-     * @return {string}
-     */
-    getUrl: function () {
-        return this._url;
-    },
-
-    /**
-     * Get request port.
-     *
-     * @return {string}
-     */
-    getPort: function () {
-        return this._port;
-    },
-
-    /**
-     * Get request method.
-     *
-     * @return {string}
-     */
-    getMethod: function () {
-        return this._method;
-    },
-
-    /**
-     * Get hash in request.
-     *
-     * @return {string}
-     */
-    getHash: function () {
-        return this._hash;
-    },
-
-    /**
-     * Get uri components.
-     *
-     * @return {object}
-     */
-    getUriComponents: function () {
-        return this._components;
-    },
-
-    /**
-     * Get query parameters.
-     *
-     * @return {object}
-     */
-    getQueryParams: function () {
-        return this._query;
-    },
-
-    /**
-     * Get post parameters.
-     *
-     * @return {object}
-     */
-    getPostParams: function () {
-        return this._post;
-    }
-};
-
-module.exports = Request;
 
 
 /***/ })
