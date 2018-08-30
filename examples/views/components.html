@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+
+        //
+        // Building a model represnting an user
+        //
+        var user = app.models.add('user', {
+            firstname: 'Kévin',
+            email: ''
+        });
+
+        //
+        // Building component representing a friend
+        //
+        var FriendCard = new app.View({
+            template: (
+                '<div>{{ friend.firstname }}</div>'
+            ),
+            context: {
+                friend: null
+            }
+        });
+
+        //
+        // Building component representing a number
+        //
+        var NumberCard = new app.View({
+            template: '<span>{{ number }}</span>',
+            context: {
+                number: null
+            }
+        });
+
+        //
+        // Building component representing a property
+        //
+        var PropCard = new app.View({
+            template: '<span>{{ prop }}: {{ value }}</span>',
+            context: {
+                prop: null,
+                value: null
+            }
+        });
+
+        //
+        // Building component which is a form input
+        //
+        var InputComponent = new app.View({
+            template: (
+                '<div class="form-group">'+
+                    '<input class="form-control" type="{{ type }}" data-bind="value" />'+
+                    '<div>Value casted: {{ value }}</div>'+
+                '</div>'
+            ),
+            context: {
+                type: 'text',
+                value: null
+            }
+        });
+
+        //
+        // Building a lmain ayout
+        //
+        var parentView = new app.View({
+            root: 'body',
+            template: (
+                '<div class="container">'+
+                    '<h1>Grand parent</h1>'+
+                    '<child-views></child-views>'+
+                '</div>'
+            )
+        });
+
+        //
+        // Building a view extending the layout
+        //
+        var childView = new app.View({
+            // Declaring view to extend
+            parent: parentView,
+            // Adding components tha could be used in view template
+            components: {
+                'input-component': InputComponent,
+                'friend-card': FriendCard,
+                'number-card': NumberCard,
+                'prop-card': PropCard
+            },
+            template: (
+                '<div class="row">'+
+                    '<div class="col-xs-12">'+
+                        '<h2>Parent view</h2>'+
+                        '<div>Value casted: {{ user.firstname }}</div>'+
+                    '</div>'+
+                    '<div class="col-xs-12">'+
+                        '<input-component type="\'text\'" value="user.firstname"></input-component>'+
+                    '</div>'+
+                '</div>'+
+                // Including component in a loop for collection
+                '<friend-card data-for="friend in friends" friend="friend"></friend-card>'+
+                // Including component in a loop for number
+                '<number-card data-for="number in 10" number="number"></number-card>'+
+                // Including component in a loop for prop in an object
+                '<prop-card data-for="prop, value in user" prop="prop" value="value"></prop-card>'
+            ),
+            context: {
+                user: user,
+                friends: [
+                    { firstname: 'Brandon' },
+                    { firstname: 'Julie' }
+                ]
+            }
+        });
+        childView.render(true);
+
+        //
+        // Making operation on view context
+        //
+
+        var context = childView.getContext();
+
+        setTimeout(function () {
+            // Renaming first friend
+            context.friends[0].firstname = 'Mike';
+
+            setTimeout(function () {
+                // Removing first friend
+                context.friends.splice(0, 1);
+
+                setTimeout(function () {
+                    // Adding a new friend
+                    context.friends.push({ firstname: 'Maryam' });
+
+                    setTimeout(function () {
+                        // Reversing friends collection
+                        context.friends = context.friends.reverse();
+
+                        setTimeout(function () {
+                            // Removing last friend
+                            context.friends.splice(1, 1);
+                        }, 1000);
+                    }, 1000);
+                }, 1000);
+            }, 1000);
+        }, 1000);
+
+    </script>
+</body>
+</html>

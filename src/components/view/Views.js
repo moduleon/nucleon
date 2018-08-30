@@ -10,7 +10,6 @@ var View = require('../../../src/components/view/classes/View');
 var views = new function () {
 
     var storage = {};
-    var currentView = null;
 
     /**
      * Add a view in the app.
@@ -55,10 +54,17 @@ var views = new function () {
             throw new Error('No view with the name "'+name+'" could be found.');
         }
         if (true !== detached) {
-            if (currentView && currentView !== storage[name]) {
-                currentView.revoke();
+            var root = storage[name]._getRoot();
+            var view;
+            for (var viewName in storage) {
+                if (viewName === name) {
+                    continue;
+                }
+                view = storage[viewName];
+                if (view.isRendered() && view._getRoot() === root) {
+                    view.revoke();
+                }
             }
-            currentView = storage[name];
         }
         storage[name].render();
     };
@@ -71,9 +77,6 @@ var views = new function () {
     this.revoke = function (name) {
         if (undefined === storage[name]) {
             throw new Error('No view with the name "'+name+'" could be found.');
-        }
-        if (currentView === storage[name]) {
-            currentView = undefined;
         }
         storage[name].revoke();
     };

@@ -7,7 +7,6 @@ describe('src/components/view/Views', function () {
         require('../../jsdom-handler')();
     });
 
-    var View = require('../../../src/components/view/classes/View');
     var views = require('../../../src/components/view/Views');
 
     describe.only('.add(name, obj)', function () {
@@ -19,6 +18,7 @@ describe('src/components/view/Views', function () {
                 root: '#app',
                 template: '<div></div>'
             });
+            var View = require('../../../src/components/view/classes/View');
             assert.equal(true, view instanceof View);
             done();
         });
@@ -27,6 +27,7 @@ describe('src/components/view/Views', function () {
     describe.only('.get(name)', function () {
         it('Should return a View instance', function (done) {
             var view = views.get('test');
+            var View = require('../../../src/components/view/classes/View');
             assert.equal(true, view instanceof View);
             done();
         });

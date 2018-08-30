@@ -82,8 +82,8 @@ var ExprEvaluator = function () {
      *
      * @return {mixed}
      */
-    this.process = function (expr, context) {
-
+    this.process = function (expr, context, replaceUndefined) {
+        replaceUndefined = undefined === replaceUndefined ? true : replaceUndefined;
         index = 0;
         components = [''];
         inSingleQuote = false;
@@ -148,7 +148,7 @@ var ExprEvaluator = function () {
         function accessProperty (path, params) {
             var fragments = path.split('.');
             if (!context || undefined === context[fragments[0]]) {
-                return undefined;
+                return replaceUndefined ? undefined : path;
             }
             var target = context;
             var owner = target;
@@ -159,7 +159,7 @@ var ExprEvaluator = function () {
                     owner = target;
                     target = target[fragments[i]];
                 } else {
-                    return undefined;
+                    return replaceUndefined ? undefined : path;
                 }
             }
             if (typeof target === 'function') {
