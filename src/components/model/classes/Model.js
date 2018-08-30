@@ -66,13 +66,18 @@ function watchObjectOrArray(target, prop, path, value, propType, es) {
         watch(target[prop], path, es);
         es
             // If object in a prop is replaced by another one
-            .on('change', path, function () {
+            .on('change', path, function (newValue, oldValue) {
                 // Watch new object
                 watch(target[prop], path, es);
                 // Trigger related listener, to force refreshing
                 for (var propPath in es._callbacks) {
-                    if (path !== propPath && -1 !== propPath.indexOf(path)) {
-                        es.trigger('change', propPath, accessor.getPropertyValue(target[prop], propPath));
+                    if (path !== propPath && 0 === propPath.indexOf(path)) {
+                        es.trigger(
+                            'change',
+                            propPath,
+                            accessor.getPropertyValue(newValue, propPath),
+                            accessor.getPropertyValue(oldValue, propPath)
+                        );
                     }
                 }
             })
@@ -80,22 +85,22 @@ function watchObjectOrArray(target, prop, path, value, propType, es) {
     // Array detected
     } else if ('array' === propType) {
         // Turn it into a collection
-        target[prop] = new Collection(value, function (event, change) {
-            es.trigger(event, path, change);
+        target[prop] = new Collection(value, function (event, change, oldValue) {
+            es.trigger(event, path, change, oldValue);
         });
         // Recursing binding
         watch(target[prop], path, es);
         es
             // If collection in a prop is replaced by an array
-            .on('change', path, function (value) {
+            .on('change', path, function (newValue) {
                 if (target[prop] instanceof Collection) {
                     return;
                 }
                 // Watch the new one, turn it into a Collection
-                value = value || target[prop];
+                newValue = newValue || target[prop];
                 delete target[prop];
-                target[prop] = new Collection(value, function (event, change) {
-                    es.trigger(event, path, change);
+                target[prop] = new Collection(newValue, function (event, change, oldValue) {
+                    es.trigger(event, path, change, oldValue);
                 });
                 watchProperty(target, prop, function (event, prop, newValue, oldValue) {
                     es.trigger(event, path, newValue, oldValue);

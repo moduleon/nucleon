@@ -6,6 +6,10 @@ var processor = require('../../../../src/components/processor/ExprEvaluator');
 var Model = require('../../../../src/components/model/classes/Model');
 var Collection = require('../../../../src/components/model/classes/Collection');
 
+var MARKERS_PATTERN = /\{\{((?!\{\{|\}\}).)*\}\}/g;
+var DELIMITERS_PATTERN = /\{\{|\}\}/g;
+var PORTIONS_PATTERN = /[ |(|)|{|}|[|]|,|:|\+|"|']/g;
+
 /**
  * Fusioner instances create a binding between an html element and a context.
  *
@@ -51,14 +55,12 @@ Fusioner.prototype = {
 
     _extractMarkers: function (string) {
         if (string) {
-            var MARKERS = /\{\{((?!\{\{|\}\}).)*\}\}/g;
-            var DELIMITERS = /\{\{|\}\}/g;
-            var markers = string.match(MARKERS);
+            var markers = string.match(MARKERS_PATTERN);
             if (markers && markers.length > 0) {
                 markers = markers.map(function (marker) {
                     return {
                         outer: marker,
-                        inner: marker.replace(DELIMITERS, '').trim()
+                        inner: marker.replace(DELIMITERS_PATTERN, '').trim()
                     };
                 });
                 return markers.length > 0 ? markers : [];
@@ -69,8 +71,11 @@ Fusioner.prototype = {
 
     _extractContextProperties: function (string) {
         var props = [];
-        var portions = string.split(/[ |(|)|{|}|[|]|,|:|\+]/g);
+        var portions = string.split(PORTIONS_PATTERN);
         for (var i = 0, len = portions.length, fragments, model; i < len; ++i) {
+            if (!portions[i]) {
+                continue;
+            }
             fragments = portions[i].split('.');
             model = fragments.shift();
             if (undefined !== this._context[model]) {
@@ -103,28 +108,20 @@ Fusioner.prototype = {
     },
 
     _replaceAliasesInElement: function (element, aliases) {
-        var i;
-        var len;
         // HTMLElement
         if (1 === element.nodeType) {
-            if (element.getAttribute('data-no-bind')) {
-                return;
+            var i;
+            for (i = element.attributes.length - 1; i >= 0; --i) {
+                element.setAttribute(element.attributes[i].name, this._replaceAliases(element.attributes[i].value, aliases));
             }
-            if (element.attributes) {
-                for (i = 0, len = element.attributes.length; i < len; ++i) {
-                    element.setAttribute(element.attributes[i].name, this._replaceAliases(element.attributes[i].value, aliases));
-                }
+            // Recursive binding
+            for (i = element.childNodes.length - 1; i >= 0; --i) {
+                this._replaceAliasesInElement(element.childNodes[i], aliases);
             }
         // Text node
         } else if (3 === element.nodeType) {
             var contentProp = element.textContent ? 'textContent' : 'nodeValue'; // IE8 polyfill
             element[contentProp] = this._replaceAliases(element[contentProp], aliases);
-        }
-        // Recursive binding
-        if (element.childNodes && element.childNodes.length > 0) {
-            for (i = 0, len = element.childNodes.length; i < len; ++i) {
-                this._replaceAliasesInElement(element.childNodes[i], aliases);
-            }
         }
 
         return element;
@@ -151,15 +148,6 @@ Fusioner.prototype = {
             target.on(event, prop.path, function (newValue) {
                 self._dispatch(event, prop, newValue);
             });
-            // Add extra listeners if prop refers to a collection
-            if (accessor.getPropertyValue(this._context, propPath) instanceof Collection) {
-                target.on('add', prop.path, function (added) {
-                    self._dispatch(event, prop, added);
-                });
-                target.on('remove', prop.path, function (removed) {
-                    self._dispatch(event, prop, removed);
-                });
-            }
         }
         this._events[eventPath].push(callback);
     },
@@ -214,8 +202,9 @@ Fusioner.prototype = {
 
         // Import values to inject in it
         var references;
+        var expr;
         if (element.hasAttribute('data-context')) {
-            var expr = element.getAttribute('data-context');
+            expr = element.getAttribute('data-context');
             references = processor.process(expr, {}, false);
             for (name in references) {
                 references[name] = this._replaceAliases(references[name], aliases);
@@ -254,22 +243,21 @@ Fusioner.prototype = {
 
         // Handle conditional rendering
         if (element.hasAttribute('data-if')) {
-            (function (expr) {
-                var handleInsertion = function () {
-                    var result = processor.process(expr, self._context);
-                    if (undefined === result || false === result || null === result || '' === result) {
-                        component.revoke();
-                    } else {
-                        component.render();
-                    }
-                };
-                handleInsertion();
-                self._extractContextProperties(expr).forEach(function (prop) {
-                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                        self._on('change', prop, handleInsertion);
-                    }
-                });
-            }(this._replaceAliases(element.getAttribute('data-if'), aliases)));
+            expr = this._replaceAliases(element.getAttribute('data-if'), aliases);
+            var handleInsertion = function () {
+                var result = processor.process(expr, self._context);
+                if (undefined === result || false === result || null === result || '' === result) {
+                    component.revoke();
+                } else {
+                    component.render();
+                }
+            };
+            handleInsertion();
+            this._extractContextProperties(expr).forEach(function (prop) {
+                if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
+                    self._on('change', prop, handleInsertion);
+                }
+            });
         } else {
             component.render();
         }
@@ -351,114 +339,84 @@ Fusioner.prototype = {
                 key = alias[0].trim();
                 alias = alias[1].trim();
             }
-            var expr = attr.replace(/.* in/, '').trim();
-            var props = this._extractContextProperties(expr, aliases);
+            var expr = this._replaceAliases(attr.replace(/.* in/, '').trim(), aliases);
+            var props = this._extractContextProperties(expr);
+            propPath = props.length ? this._getPropPath(props[0]) : null;
 
             // Save data needed for insertion of loop elements.
-            var parent = element.parentNode;
+            var parent = element.parentNode || this._view._getRoot();
             var position = DOMManipulator.getPosition(element);
+
             // Put element aside. Will be used as a model for loop elements.
             this._removeElement(element);
             element.removeAttribute('data-for');
 
             var iterable = processor.process(expr, this._context);
-            if (undefined === iterable) {
+            if (false === this._isIterable(iterable)) {
                 throw new Error(expr+' is an invalid expression for a loop.');
             }
+
             var nodes = [];
 
             // For i in collection length
             if (iterable instanceof Collection) {
-                prop = props[0];
-                propPath = this._getPropPath(prop);
-                var oldCollection = [];
                 var handleLoopForCollection = function (newCollection) {
+                    var i;
+                    var len;
                     newCollection = newCollection || accessor.getPropertyValue(self._context, propPath);
-                    var i, j, len, len2;
-                    var newNode;
-                    var newNodes = [];
-                    var newIndexes = [];
-                    var changedIndexes = [];
-                    var removedIndexes = [];
-                    var eventPath;
-                    // Nodes operations. Compare old and new collection items
-                    for (i = 0, len = newCollection.length; i < len; ++i) {
-                        // Same item in old and new collection, do nothing
-                        if (oldCollection[i] === newCollection[i]) {
-                            continue;
-                        }
-                        // New item, create a node
-                        if (!oldCollection[i]) {
+                    if (newCollection.length > nodes.length) {
+                        var newNode;
+                        var newNodes = [];
+                        for (i = nodes.length, len = newCollection.length; i < len; ++i) {
+                            aliases[alias] = propPath+'.'+i;
+                            if (key) {
+                                aliases[key] = i+'';
+                            }
                             newNode = element.cloneNode(true);
-                            newNodes.push(newNode);
-                            newIndexes.push(i);
                             nodes.push(newNode);
-                        // Item changed, save its index for calling an update in listeners operations
-                        } else {
-                            changedIndexes.push(i);
+                            newNodes.push(newNode);
+
+                            self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
                         }
-                    }
-                    if (oldCollection.length > newCollection.length) {
-                        // Remove nodes no longer needed
-                        for (i = oldCollection.length - 1, len = newCollection.length - 1; i > len; --i) {
+                        DOMManipulator.insertElements(newNodes, parent, position + (nodes.length - newNodes.length));
+                    } else if (newCollection.length < nodes.length) {
+                        for (i = nodes.length, len = newCollection.length; i >= len; --i) {
                             DOMManipulator.removeElement(nodes[i]);
                             nodes.splice(i, 1);
-                            // Save its index for removing listener in listeners operations
-                            removedIndexes.push(i);
-                        }
-                    } else {
-                        // Insert and bind new nodes
-                        DOMManipulator.insertElements(newNodes, parent, position + (nodes.length - newNodes.length));
-                        for (i = 0, len = newIndexes.length; i < len; ++i) {
-                            aliases[alias] = propPath+'.'+newIndexes[i];
-                            if (key) {
-                                aliases[key] = newIndexes[i]+'';
-                            }
-                            self._bind(self._replaceAliasesInElement(nodes[newIndexes[i]], aliases), aliases);
                         }
                     }
-                    // Listeners operations
-                    if (changedIndexes.length || removedIndexes.length) {
-                        // TODO - prop.1 matches prop.[10]
-                        var changedPropPaths = changedIndexes.length ? new RegExp('^'+propPath+'\\.(?:'+changedIndexes.join('|')+')\\.') : null;
-                        var removedPropPaths = removedIndexes.length ? new RegExp('^'+propPath+'\\.(?:'+removedIndexes.join('|')+')\\.') : null;
-                        for (eventPath in self._events) {
-                            // Remove listeners no longer needed
-                            if (removedPropPaths && removedPropPaths.test(eventPath)) {
-                                self._events[eventPath] = [];
-                            }
-                            // Trigger listeners related to updated nodes
-                            if (changedPropPaths && changedPropPaths.test(eventPath)) {
-                                for (j = 0, len2 = self._events[eventPath].length; j < len2; ++j) {
-                                    self._events[eventPath][j]();
-                                }
-                            }
-                        }
-                    }
-                    oldCollection = newCollection.slice(0);
                 };
-                this._on('change', prop, function () { handleLoopForCollection(); });
                 handleLoopForCollection(iterable);
+                this._on('change', props[0], handleLoopForCollection);
 
             // For name in object
             } else if (iterable instanceof Object) {
-                var propNames = [];
-                for (var propName in iterable) {
-                    if (!iterable.hasOwnProperty(propName) || typeof iterable[propName] === 'function') {
-                        continue;
+                var updateLoopForObject = function (newObject) {
+                    for (var i = nodes.length - 1; i >= 0; --i) {
+                        DOMManipulator.removeElement(nodes[i]);
+                        nodes.splice(i, 1);
                     }
-                    propNames.push(propName);
-                    nodes.push(element.cloneNode(true));
-                }
-                DOMManipulator.insertElements(nodes, parent, position);
-                for (i = 0, len = nodes.length; i < len; ++i) {
-                    if (key) {
-                        aliases[key] = '"'+propNames[i]+'"';
-                        aliases[alias] = expr+'.'+propNames[i];
-                    } else {
-                        aliases[alias] = '"'+propNames[i]+'"';
+                    newObject = newObject || accessor.getPropertyValue(self._context, propPath);
+                    var newNode;
+                    for (var propName in iterable) {
+                        if (!newObject.hasOwnProperty(propName) || 'function' === typeof newObject[propName]) {
+                            continue;
+                        }
+                        if (key) {
+                            aliases[key] = '"'+propName+'"';
+                            aliases[alias] = propPath+'.'+propName;
+                        } else {
+                            aliases[alias] = '"'+propName+'"';
+                        }
+                        newNode = element.cloneNode(true);
+                        self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
+                        nodes.push(newNode);
                     }
-                    self._bind(self._replaceAliasesInElement(nodes[i], aliases), aliases);
+                    DOMManipulator.insertElements(nodes, parent, position);
+                };
+                updateLoopForObject(iterable);
+                if (props.length) {
+                    this._on('change', props[0], updateLoopForObject);
                 }
 
             // For i in number
@@ -664,10 +622,8 @@ Fusioner.prototype = {
         }
 
         // Recursive binding
-        if (element.childNodes.length > 0) {
-            for (i = element.childNodes.length - 1; i >= 0; --i) {
-                this._bind(element.childNodes[i], aliases);
-            }
+        for (i = element.childNodes.length - 1; i >= 0; --i) {
+            this._bind(element.childNodes[i], aliases);
         }
     },
 
@@ -768,8 +724,10 @@ Fusioner.prototype = {
                         }
                         if (key) {
                             aliases[key] = '"'+propName+'"';
+                            aliases[alias] = propPath+'.'+propName;
+                        } else {
+                            aliases[alias] = '"'+propName+'"';
                         }
-                        aliases[alias] = propPath+'.'+propName;
                         components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
                     }
                 };
