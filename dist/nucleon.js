@@ -3215,13 +3215,14 @@ Fusioner.prototype = {
         // Import values to inject in it
         var references;
         var expr;
-        if (element.hasAttribute('data-context')) {
-            expr = element.getAttribute('data-context');
-            references = processor.process(expr, {}, false);
-            for (name in references) {
-                references[name] = this._replaceAliases(references[name], aliases);
-                context[name] = processor.process(references[name], this._context);
+        for (var i = element.attributes.length - 1; i >= 0; --i) {
+            name = element.attributes[i].name;
+            if (0 === name.indexOf('data-')) {
+                continue;
             }
+            references = references || {};
+            references[name] = this._replaceAliases(element.attributes[i].value, aliases);
+            context[name] = processor.process(references[name], this._context);
         }
 
         // Build context
@@ -3237,18 +3238,21 @@ Fusioner.prototype = {
         if (references) {
             for (name in references) {
                 this._extractContextProperties(references[name] + '').forEach(function (prop) {
-                    // Component to view changes
-                    component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
-                        // Handle missing values (callback on queue)
-                        newValue = newValue || accessor.getPropertyValue(component._context, name);
-                        accessor.setPropertyValue(self._context, references[name], newValue);
-                    });
-                    // View to component changes
-                    self._on('change', prop, function (newValue) {
-                        // Handle missing values (callback on queue)
-                        newValue = newValue || accessor.getPropertyValue(self._context, references[name]);
-                        accessor.setPropertyValue(context, name, newValue);
-                    });
+                    (function (name) {
+                        // Component to view changes
+                        component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
+                            // console.log('')
+                            // Handle missing values (callback on queue)
+                            newValue = newValue || accessor.getPropertyValue(component._context, name);
+                            accessor.setPropertyValue(self._context, references[name], newValue);
+                        });
+                        // View to component changes
+                        self._on('change', prop, function (newValue) {
+                            // Handle missing values (callback on queue)
+                            newValue = newValue || accessor.getPropertyValue(self._context, references[name]);
+                            accessor.setPropertyValue(context, name, newValue);
+                        });
+                    }(name));
                 });
             }
         }
