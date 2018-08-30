@@ -3,6 +3,7 @@ var Route = require('../../../../src/components/routing/classes/Route');
 var router = require('../../../../src/components/routing/Router');
 var history = require('../../../../src/components/browser/History');
 var views = require('../../../../src/components/view/Views');
+var View = require('../../../../src/components/view/classes/View');
 
 /**
  * Page is an object in charge of rendering a view for all requests on a given route.
@@ -31,13 +32,15 @@ Page.prototype = {
         }
         this._name = config.name;
 
-        if (!config.fn) {
-            throw new Error('Page "'+config.name+'" must have a function.');
+        if (!config.fn && !config.view) {
+            throw new Error('Page "'+config.name+'" must have a function or a view.');
         }
-        if ('function' !== typeof config.fn) {
+        if (config.fn && 'function' !== typeof config.fn) {
             throw new Error('"fn" declared in page "'+config.name+'" is not a function.');
         }
-        this._fn = config.fn;
+        this._fn = config.fn || function () {
+            this.renderView();
+        };
 
         if (!config.route) {
             throw new Error('Page "'+config.name+'" must have a route.');
@@ -54,7 +57,10 @@ Page.prototype = {
         router.register(this._route);
 
         if (config.view) {
-            this._view = views.add(this._name+'_view', config.view);
+            if (!(config.view instanceof View)) {
+                config.view = views.add(this._name+'_view', config.view);
+            }
+            this._view = config.view;
         }
 
         return this;

@@ -21,6 +21,15 @@ var Collection = function (source, handler) {
 
 var arrayProto = Array.prototype;
 
+var clone = function (obj) {
+    var cloned = [];
+    for (var i = 0, len = obj.length; i < len; ++i) {
+        cloned.push(obj[i]);
+    }
+
+    return cloned;
+};
+
 // Defining setters from Array prototype
 // Adding changes handler.
 var setters = {
@@ -30,6 +39,7 @@ var setters = {
 for (var method in setters) {
     (function (method) {
         Collection.prototype[method] = function () {
+            var oldValue = clone(this);
             var event = setters[method];
             var returnValue = arrayProto[method].apply(this, arguments);
             var change;
@@ -38,7 +48,10 @@ for (var method in setters) {
             } else if ('add' === event) {
                 change = arguments[1] ? arrayProto.slice.call(arguments) : arguments[0];
             }
-            this._handler(event, change);
+            this._handler(event, change, oldValue);
+            if ('change' !== event) {
+                this._handler('change', this, oldValue);
+            }
 
             return returnValue;
         };

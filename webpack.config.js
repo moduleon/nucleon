@@ -3,12 +3,6 @@ const path = require('path');
 const MinifyPlugin = require("babel-minify-webpack-plugin");
 
 module.exports = {
-    resolve: {
-        extensions: ['.js', '.json'],
-        alias: {
-          '@': path.join(__dirname, 'src')
-        }
-    },
     entry: {
         'nucleon': './src/main.js',
         'nucleon.min': './src/main.js',
