@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Views example - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+
+    <!-- App script -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+    <script type="text/javascript">
+
+        var user = app.models.add('user', {
+            firstname: 'Kévin',
+            email: ''
+        });
+
+        var FriendCard = new app.View({
+            template: (
+                '<div>{{ friend.firstname }}</div>'
+            ),
+            context: {
+                friend: null
+            }
+        });
+
+        var NumberCard = new app.View({
+            template: '<span>{{ number }}</span>',
+            context: {
+                number: null
+            }
+        });
+
+        var PropCard = new app.View({
+            template: '<span>{{ prop }}: {{ value }}</span>',
+            context: {
+                prop: null,
+                value: null
+            }
+        });
+
+        var InputComponent = new app.View({
+            template: (
+                '<div class="form-group">'+
+                    '<input class="form-control" type="{{ type }}" data-bind="value" />'+
+                    '<div>Value casted: {{ value }}</div>'+
+                '</div>'
+            ),
+            context: {
+                type: 'text',
+                value: null
+            }
+        });
+
+        var parentView = new app.View({
+            root: 'body',
+            template: (
+                '<div class="container">'+
+                    '<h1>Grand parent</h1>'+
+                    '<child-views></child-views>'+
+                '</div>'
+            )
+        });
+
+        var childView = new app.View({
+            parent: parentView,
+            components: {
+                'input-component': InputComponent,
+                'friend-card': FriendCard,
+                'number-card': NumberCard,
+                'prop-card': PropCard
+            },
+            template: (
+                '<div class="row">'+
+                    '<div class="col-xs-12">'+
+                        '<h2>Parent view</h2>'+
+                        '<div>Value casted: {{ user.firstname }}</div>'+
+                    '</div>'+
+                    '<div class="col-xs-12">'+
+                        '<input-component data-context="{ "type": "text", "value": user.firstname }"></input-component>'+
+                    '</div>'+
+                '</div>'+
+                '<friend-card data-for="friend in friends" data-context="{ "friend": friend }"></friend-card>'+
+                '<number-card data-for="number in 10" data-context="{ "number": number }"></number-card>'+
+                '<prop-card data-for="prop, value in user" data-context="{ "prop": prop, "value": value }"></prop-card>'
+            ),
+            context: {
+                user: user,
+                friends: [
+                    { firstname: 'Brandon' },
+                    { firstname: 'Julie' }
+                ]
+            }
+        });
+        childView.render(true);
+
+        var context = childView.getContext();
+
+        setTimeout(function () {
+            context.friends[0].firstname = 'Mike';
+
+            setTimeout(function () {
+                context.friends.splice(0, 1);
+
+                setTimeout(function () {
+                    context.friends.push({ firstname: 'Maryam' });
+
+                    setTimeout(function () {
+                        context.friends = context.friends.reverse();
+
+                        setTimeout(function () {
+                            context.friends.splice(1, 1);
+                        }, 1000);
+                    }, 1000);
+                }, 1000);
+            }, 1000);
+        }, 1000);
+
+    </script>
+</body>
+</html>
