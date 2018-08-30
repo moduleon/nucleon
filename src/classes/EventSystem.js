@@ -83,10 +83,14 @@ EventSystem.prototype = {
             var events = this._extractEvents(event);
             var j;
             var len2;
+            var args = Array.prototype.slice.call(arguments, 2);
             for (var i = 0, len = events.length; i < len; ++i) {
+                if (!this._callbacks[target][events[i]]) {
+                    continue;
+                }
                 for (j = 0, len2 = this._callbacks[target][events[i]].length; j < len2; ++j) {
                     // If listener returns false, stop propagating
-                    if (false === this._callbacks[target][events[i]][j].apply(this, Array.prototype.slice.call(arguments, 2))) {
+                    if (false === this._callbacks[target][events[i]][j].apply(this, args)) {
                         break;
                     }
                 }
