@@ -19,7 +19,11 @@ var Model = function (obj) {
     accessor.duplicateProperties(obj, this);
     watch(this, null, es);
 
-    this.on = function (event, path, callback) {
+    this.on = function (event, path, callback, pathAlias, caller, argsOnly) {
+        es.on(event, path, callback, pathAlias, caller, argsOnly);
+    };
+
+    this.off = function (event, path, callback) {
         es.on(event, path, callback);
     };
 

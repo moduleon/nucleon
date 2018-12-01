@@ -288,9 +288,9 @@ View.prototype = {
     },
 
     /**
-     * Clone view with a new config.
+     * Clone view with a new config. Used for components.
      *
-     * @param  {object} newConfig
+     * @param  {object} config
      *
      * @return {View}
      */

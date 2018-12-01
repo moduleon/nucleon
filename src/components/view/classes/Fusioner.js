@@ -22,7 +22,7 @@ var PORTIONS_PATTERN = /[ |(|)|{|}|[|]|,|:|\+|"|']/g;
  */
 var Fusioner = function (config) {
     this._init = [];
-    this._waiting = [];
+    this._waiting = {};
     this._events = {};
     if (false === config.elements instanceof Array) {
         config.elements = [config.elements];
@@ -144,10 +144,7 @@ Fusioner.prototype = {
         if (!this._events[eventPath]) {
             this._events[eventPath] = [];
             var target = prop.model ? this._context[prop.model] : this._context;
-            var self = this;
-            target.on(event, prop.path, function (newValue) {
-                self._dispatch(event, prop, newValue);
-            });
+            target.on(event, prop.path, this._dispatch, propPath, this, false);
         }
         this._events[eventPath].push(callback);
     },
@@ -158,7 +155,7 @@ Fusioner.prototype = {
     },
 
     _dispatch: function (event, prop, newValue) {
-        var eventPath = this._getPropPath(prop)+':'+event;
+        var eventPath = prop+':'+event;
         if (this._events[eventPath].length > 0) {
             var i;
             var len;
@@ -178,10 +175,11 @@ Fusioner.prototype = {
             // Elsewise, store them in a queue
             } else {
                 for (i = 0, len = this._events[eventPath].length; i < len; ++i) {
-                    if (this._waiting.indexOf(this._events[eventPath][i]) !== -1) {
+                    this._waiting[eventPath] = this._waiting[eventPath] || [];
+                    if (this._waiting[eventPath].indexOf(this._events[eventPath][i]) !== -1) {
                         continue;
                     }
-                    this._waiting.push(this._events[eventPath][i]);
+                    this._waiting[eventPath].push(this._events[eventPath][i]);
                 }
             }
         }
@@ -229,7 +227,6 @@ Fusioner.prototype = {
                     (function (name) {
                         // Component to view changes
                         component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
-                            // console.log('')
                             // Handle missing values (callback on queue)
                             newValue = newValue || accessor.getPropertyValue(component._context, name);
                             accessor.setPropertyValue(self._context, references[name], newValue);
@@ -364,7 +361,7 @@ Fusioner.prototype = {
 
             // For i in collection length
             if (iterable instanceof Collection) {
-                var handleLoopForCollection = function (newCollection) {
+                var updateLoopForCollection = function (newCollection) {
                     var i;
                     var len;
                     newCollection = newCollection || accessor.getPropertyValue(self._context, propPath);
@@ -390,8 +387,8 @@ Fusioner.prototype = {
                         }
                     }
                 };
-                handleLoopForCollection(iterable);
-                this._on('change', props[0], handleLoopForCollection);
+                updateLoopForCollection(iterable);
+                this._on('change', props[0], updateLoopForCollection);
 
             // For name in object
             } else if (iterable instanceof Object) {
@@ -426,7 +423,7 @@ Fusioner.prototype = {
             // For i in number
             } else if ('number' === typeof iterable) {
                 var oldNumber = 0;
-                var handleLoopForNumber = function (number) {
+                var updateLoopForNumber = function (number) {
                     number = number || processor.process(expr, self._context);
                     if (number === oldNumber) {
                         return;
@@ -455,10 +452,10 @@ Fusioner.prototype = {
                 };
                 if (props.length > 0) {
                     for (i = 0, len = props.length; i < len; ++i) {
-                        this._on('change', props[i], function () { handleLoopForNumber(); });
+                        this._on('change', props[i], updateLoopForNumber);
                     }
                 }
-                handleLoopForNumber(iterable);
+                updateLoopForNumber(iterable);
             }
 
             return;
@@ -761,10 +758,11 @@ Fusioner.prototype = {
                 if (props.length === 1) {
                     this._on('change', props[0], updateComponentForNumber);
                 } else if (props.length > 1) {
+                    var refreshComponentForNumber = function () {
+                        updateComponentForNumber(); // Don't pass value, which rely on multiple context values. Force recalculate.
+                    };
                     for (var i = props.length - 1; i >= 0; --i) {
-                        this._on('change', props[i], function () {
-                            updateComponentForNumber(); // Don't pass value, which rely on multiple context values. Force recalculate.
-                        });
+                        this._on('change', props[i], refreshComponentForNumber);
                     }
                 }
             }
@@ -780,6 +778,15 @@ Fusioner.prototype = {
         return true === thing instanceof Collection || true === thing instanceof Object || 'number' === typeof thing;
     },
 
+    _hasWaitingChanges: function () {
+        for (var prop in this._waiting) {
+            if (this._waiting.hasOwnProperty(prop)) {
+                return true;
+            }
+        }
+        return false;
+    },
+
     /**
      * Apply all changes waiting to be applied in element.
      */
@@ -792,15 +799,22 @@ Fusioner.prototype = {
             }
             this._init = [];
         }
-        if (this._waiting.length > 0) {
+        if (this._hasWaitingChanges()) {
             // Call onUpdate callback
             if ('function' === typeof this._onUpdate) {
                 this._onUpdate();
             }
-            for (i = 0, len = this._waiting.length; i < len; ++i) {
-                this._waiting[i]();
+            var newVal;
+            for (var eventPath in this._waiting) {
+                if (!this._waiting.hasOwnProperty(eventPath)) {
+                    continue;
+                }
+                newVal = accessor.getPropertyValue(this._context, eventPath.split(':')[0]);
+                for (i = 0, len = this._waiting[eventPath].length; i < len; ++i) {
+                    this._waiting[eventPath][i](newVal);
+                }
             }
-            this._waiting = [];
+            this._waiting = {};
             // Call onUpdated callback
             if ('function' === typeof this._onUpdated) {
                 this._onUpdated();
