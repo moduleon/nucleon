@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Performance test - Nucleon JS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h1>Nucleon v2</h1>
+                <div id="nucleon_demo"></div>
+            </div>
+            <div class="col-sm-6">
+                <h1>Vue JS</h1>
+                <div id="vue_demo"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App -->
+    <script type="text/javascript" src="/nucleon.js"></script>
+
+    <!-- Vue -->
+    <script src="https://unpkg.com/vue"></script>
+
+    <!-- Performance testing -->
+    <script type="text/javascript">
+        var t0;
+        var t1;
+        var task;
+        var executor;
+        var callback;
+        function startRecord (e, t) {
+            executor = e;
+            task = t;
+            t0 = performance.now();
+        }
+        function endRecord () {
+            t1 = performance.now();
+            console.log(executor+' took '+(t1 - t0)+' milliseconds for '+task);
+        }
+        startRecord('Nucleon', 'rendering');
+        var nView = app.views.add('demo', {
+            root: '#nucleon_demo',
+            template: (
+                '<div>'+
+                    '<h2>Simple markers</h2>'+
+                    '<p>{{ user.firstname + " " + user.lastname }}</p>'+
+                    '<a href="{{ user.firstname }}" class="btn btn-default">{{ user.firstname }} profile</a>'+
+                '</div>'+
+                '<div>'+
+                    '<h2>Loops</h2>'+
+                    '<ul>'+
+                        '<li data-for="friend in user.friends">'+
+                            '{{ friend.firstname + " " + friend.lastname }}'+
+                        '</li>'+
+                    '</ul>'+
+                '</div>'+
+                '<div>'+
+                    '<h2>Conditional rendering</h2>'+
+                    '<div>'+
+                        '<h3>Conditional insertion (insert/remove) <span class="label label-default">New</span></h3>'+
+                        '<p data-if="user.firstname == \'Kévin\'">Big bro</p>'+
+                        '<p data-if="user.firstname == \'Brandon\'">Little bro</p>'+
+                    '</div>'+
+                    '<div>'+
+                        '<h3>Conditional displaying (show/hide)</h3>'+
+                        '<p data-show="user.firstname == \'Kévin\'">Big bro</p>'+
+                        '<p data-show="user.firstname == \'Brandon\'">Little bro</p>'+
+                    '</div>'+
+                '</div>'+
+                '<div>'+
+                    '<h2>Events</h2>'+
+                    '<button class="btn btn-default" data-events="click:user.sayMyName();">Click me</button>'+
+                '</div>'+
+                '<div>'+
+                    '<h2>Forms (Two way data binding)</h2>'+
+                    '<div class="form-group">'+
+                        '<h3>Input text</h3>'+
+                        '<input class="form-control" type="text" data-bind="user.firstname" />'+
+                    '</div>'+
+                    '<div class="form-group">'+
+                        '<h3>Textarea</h3>'+
+                        '<textarea class="form-control" data-bind="user.firstname"></textarea>'+
+                    '</div>'+
+                    '<div class="form-group">'+
+                        '<h3>Select</h3>'+
+                        '<select class="form-control" data-bind="user.firstname">'+
+                            '<option value="">Select</option>'+
+                            '<option value="Kévin">Kévin</option>'+
+                            '<option value="Brandon">Brandon</option>'+
+                        '</select>'+
+                    '</div>'+
+                    '<div class="form-group">'+
+                        '<h3>Radio</h3>'+
+                        '<label>Kévin</label> <input type="radio" data-bind="user.firstname" value="Kévin" /> '+
+                        '<label>Brandon</label> <input type="radio" data-bind="user.firstname" value="Brandon" />'+
+                    '</div>'+
+                    '<div class="form-group">'+
+                        '<h3>Checkbox</h3>'+
+                        '<label>Kévin</label> <input type="checkbox" data-bind="user.firstname" value="Kévin" /> '+
+                        '<label>Brandon</label> <input type="checkbox" data-bind="user.firstname" value="Brandon" />'+
+                    '</div>'+
+                '</div>'+
+                '<div>'+
+                    '<h2>Private vars  <span class="label label-default">New</span></h2>'+
+                    '<p>Secret private var is {{ private }}</p>'+
+                '</div>'
+            ),
+            context: {
+                user: {
+                    firstname: 'Kévin',
+                    lastname: 'Marcachi',
+                    sayMyName: function () {
+                        alert('I am '+this.firstname+' '+this.lastname);
+                    },
+                    friends: [
+                        { firstname: 'Brandon', lastname: 'Marcachi' },
+                        { firstname: 'Lili', lastname: 'Bubble' },
+                        { firstname: 'Mike', lastname: 'Monkey' },
+                    ]
+                },
+                private: 42
+            },
+            onUpdated: function () {
+                if (callback) {
+                    callback();
+                }
+            }
+        });
+        nView.render();
+        endRecord();
+        startRecord('Vue', 'rendering');
+        var vue = new Vue({
+            el: '#vue_demo',
+            data: {
+                user: {
+                    firstname: 'Kévin',
+                    lastname: 'Marcachi',
+                    sayMyName: function () {
+                        alert('I am '+this.firstname+' '+this.lastname);
+                    },
+                    friends: [
+                        { firstname: 'Brandon', lastname: 'Marcachi' },
+                        { firstname: 'Lili', lastname: 'Bubble' },
+                        { firstname: 'Mike', lastname: 'Monkey' },
+                    ]
+                },
+                private: 42
+            },
+            template: (
+                '<div id="vue_demo">'+
+                    '<div>'+
+                        '<h2>Simple markers</h2>'+
+                        '<p>{{ user.firstname + " " + user.lastname }}</p>'+
+                        '<a v-bind:href="user.firstname" class="btn btn-default">{{ user.firstname }} profile</a>'+
+                    '</div>'+
+                    '<div>'+
+                        '<h2>Loops</h2>'+
+                        '<ul>'+
+                            '<li v-for="friend in user.friends">'+
+                                '{{ friend.firstname + " " + friend.lastname }}'+
+                            '</li>'+
+                        '</ul>'+
+                    '</div>'+
+                    '<div>'+
+                        '<h2>Conditional rendering</h2>'+
+                        '<div>'+
+                            '<h3>Conditional insertion (insert/remove)</h3>'+
+                            '<p v-if="user.firstname == \'Kévin\'">Big bro</p>'+
+                            '<p v-if="user.firstname == \'Brandon\'">Little bro</p>'+
+                        '</div>'+
+                        '<div>'+
+                            '<h3>Conditional displaying (show/hide)</h3>'+
+                            '<p v-show="user.firstname == \'Kévin\'">Big bro</p>'+
+                            '<p v-show="user.firstname == \'Brandon\'">Little bro</p>'+
+                        '</div>'+
+                    '</div>'+
+                    '<div>'+
+                        '<h2>Events</h2>'+
+                        '<button class="btn btn-default" v-on:click="user.sayMyName()">Click me</button>'+
+                    '</div>'+
+                    '<div>'+
+                        '<h2>Forms (Two way data binding)</h2>'+
+                        '<div class="form-group">'+
+                            '<h3>Input text</h3>'+
+                            '<input class="form-control" type="text" v-model="user.firstname" />'+
+                        '</div>'+
+                        '<div class="form-group">'+
+                            '<h3>Textarea</h3>'+
+                            '<textarea class="form-control" v-model="user.firstname"></textarea>'+
+                        '</div>'+
+                        '<div class="form-group">'+
+                            '<h3>Select</h3>'+
+                            '<select class="form-control" v-model="user.firstname">'+
+                                '<option value="">Select</option>'+
+                                '<option value="Kévin">Kévin</option>'+
+                                '<option value="Brandon">Brandon</option>'+
+                            '</select>'+
+                        '</div>'+
+                        '<div class="form-group">'+
+                            '<h3>Radio</h3>'+
+                            '<label>Kévin</label> <input type="radio" v-model="user.firstname" value="Kévin" /> '+
+                            '<label>Brandon</label> <input type="radio" v-model="user.firstname" value="Brandon" />'+
+                        '</div>'+
+                        '<div class="form-group">'+
+                            '<h3>Checkbox</h3>'+
+                            '<label>Kévin</label> <input type="checkbox" v-model="user.firstname" value="Kévin" /> '+
+                            '<label>Brandon</label> <input type="checkbox" v-model="user.firstname" value="Brandon" />'+
+                        '</div>'+
+                    '</div>'+
+                    '<div>'+
+                        '<h2>Private vars</h2>'+
+                        '<p>Secret private var is {{ private }}</p>'+
+                    '</div>'+
+                '</div>'
+            ),
+            updated: function () {
+                if (callback) {
+                    callback();
+                }
+            }
+        });
+        endRecord();
+        callback = function () {
+            endRecord();
+            callback = function () {
+                endRecord();
+                callback = function () {
+                    endRecord();
+                    callback = function () {
+                        endRecord();
+                        callback = function () {
+                            endRecord();
+                            callback = function () {
+                                endRecord();
+                                callback = null;
+                            };
+                            startRecord('Vue', 'Changing important prop attribute');
+                            vue.user.firstname = 'Brandon';
+                        };
+                        startRecord('Nucleon', 'Changing important prop attribute');
+                        nView._context.user.firstname = 'Brandon';
+                    };
+                    startRecord('Vue', 'Changing prop attribute');
+                    vue.private = 'yolo';
+                };
+                startRecord('Nucleon', 'Changing prop attribute');
+                nView._context.private = 'yolo';
+            };
+            startRecord('Vue', 'adding 500 items');
+            var friends = [];
+            for (var i = 500; i >= 0; --i) {
+                vue.user.friends.push({ firstname: 'added', lastname: 'friend'});
+            }
+        };
+        startRecord('Nucleon', 'adding 500 items');
+        var friends = [];
+        for (var i = 500; i >= 0; --i) {
+            nView._context.user.friends.push({ firstname: 'added', lastname: 'friend'});
+        }
+    </script>
+</body>
+</html>

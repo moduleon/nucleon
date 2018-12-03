@@ -31,12 +31,16 @@ View.prototype = {
     _parent: null,
     _components: null,
     // Event callbacks
+    _onCreate: null,
+    _onCreated: null,
     _onRender: null,
     _onRendered: null,
     _onUpdate: null,
     _onUpdated: null,
     _onRevoke: null,
     _onRevoked: null,
+    _onDestroy: null,
+    _onDestroyed: null,
     // Inner vars
     _elements: [],
     _position: null,
@@ -181,8 +185,19 @@ View.prototype = {
     },
 
     _mount: function () {
+        var create = false;
+        if (!this._elements.length) {
+            create = true;
+            // Call onCreate callback
+            if ('function' === typeof this._onCreate) {
+                this._onCreate();
+            }
+        }
         this._prepareElements();
         this._buildFusioner();
+        if (create && 'function' === typeof this._onCreated) {
+            this._onCreated();
+        }
     },
 
     /**
@@ -257,6 +272,22 @@ View.prototype = {
             if ('function' === typeof this._onRevoked) {
                 this._onRevoked();
             }
+        }
+    },
+
+    /**
+     * Revoke and remove a view instance.
+     */
+    destroy: function () {
+        // Call onDestroy callback
+        if ('function' === typeof this._onDestroy) {
+            this._onDestroy();
+        }
+        this.revoke();
+        this._fusioner.destroy();
+        // Call onDestroyed callback
+        if ('function' === typeof this._onDestroyed) {
+            this._onDestroyed();
         }
     },
 
