@@ -147,7 +147,7 @@ Fusioner.prototype = {
         return !result && 0 !== result ? '' : result;
     },
 
-    _on: function (event, prop, callback) {
+    _on: function (event, prop, callback, listeners) {
         var propPath = this._getPathFromProp(prop);
         var eventPath = propPath+':'+event;
         // Register a unique event listener in model for prop
@@ -157,16 +157,33 @@ Fusioner.prototype = {
             target.on(event, prop.path, this._dispatch, [eventPath], this);
         }
         this._events[eventPath].push(callback);
+        if (listeners) {
+            this._saveInListeners(event, prop, callback, listeners);
+        }
     },
 
-    _off: function (event, prop) {
+    _off: function (event, prop, callback) {
+        var propPath = this._getPathFromProp(prop);
+        var eventPath = propPath+':'+event;
+        if (this._events[eventPath]) {
+            var index = this._events[eventPath].indexOf(callback);
+            if (-1 !== index) {
+                this._events[eventPath].splice(index, 1);
+                if (0 === this._events[eventPath].length) {
+                    this._clear(event, prop);
+                }
+            }
+        }
+    },
+
+    _clear: function (event, prop) {
         var propPath = this._getPathFromProp(prop);
         var eventPath = propPath+':'+event;
         if (this._events[eventPath]) {
             var target = prop.model ? this._context[prop.model] : this._context;
             target.off(event, propPath, this._dispatch);
         }
-        delete this._events[eventPath];
+        this._events[eventPath] = null;
     },
 
     _trigger: function (event, prop, newValue) {
@@ -201,6 +218,19 @@ Fusioner.prototype = {
                     this._waiting[eventPath].push(this._events[eventPath][i]);
                 }
             }
+        }
+    },
+
+    _saveInListeners: function (event, prop, callback, listeners) {
+        listeners.push(event, prop, callback);
+    },
+
+    _clearFromListeners: function (listeners) {
+        if (!listeners || !listeners.length) {
+            return;
+        }
+        for (var i = 0, len = listeners.length - 3; i <= len; i += 3) {
+            this._off(listeners[i], listeners[i + 1], listeners[i + 2]);
         }
     },
 
@@ -296,8 +326,7 @@ Fusioner.prototype = {
         }
     },
 
-    _bind: function (element, aliases) {
-
+    _bind: function (element, aliases, listeners) {
         if (!element) {
             return;
         }
@@ -326,17 +355,17 @@ Fusioner.prototype = {
             }
 
             // Other
-            return this._bindElement(element, aliases, tagName);
+            return this._bindElement(element, aliases, tagName, listeners);
 
         // TextNode
         } else if (3 === element.nodeType) {
-            return this._bindTextNode(element, aliases);
+            return this._bindTextNode(element, aliases, listeners);
         }
 
         return element;
     },
 
-    _bindElement: function (element, aliases, tagName) {
+    _bindElement: function (element, aliases, tagName, listeners) {
 
         var self = this;
         var attr;
@@ -370,6 +399,7 @@ Fusioner.prototype = {
             // Put element aside. Will be used as a model for loop elements.
             this._removeElement(element);
             element.removeAttribute('data-for');
+            tagName = element.tagName.toLowerCase();
 
             var iterable = processor.process(expr, this._context);
             if (false === this._isIterable(iterable)) {
@@ -377,6 +407,9 @@ Fusioner.prototype = {
             }
 
             var nodes = [];
+            if (!listeners) {
+                var listenersStorage = [];
+            }
 
             // For i in collection length
             if (iterable instanceof Collection) {
@@ -395,14 +428,21 @@ Fusioner.prototype = {
                             newNode = element.cloneNode(true);
                             nodes.push(newNode);
                             newNodes.push(newNode);
-
-                            self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
+                            if (listenersStorage) {
+                                listeners = [];
+                                listenersStorage.push(listeners);
+                            }
+                            self._bindElement(newNode, aliases, tagName, listeners);
                         }
                         DOMManipulator.insertElements(newNodes, parent, position + (nodes.length - newNodes.length));
                     } else if (newCollection.length < nodes.length) {
                         for (i = nodes.length, len = newCollection.length; i >= len; --i) {
                             DOMManipulator.removeElement(nodes[i]);
                             nodes.splice(i, 1);
+                            if (listenersStorage) {
+                                self._clearFromListeners(listenersStorage[i]);
+                                listenersStorage.splice(i, 1);
+                            }
                         }
                     }
                 };
@@ -412,13 +452,19 @@ Fusioner.prototype = {
             // For name in object
             } else if (iterable instanceof Object) {
                 var updateLoopForObject = function (newObject) {
+                    // Object changed, clearing
                     for (var i = nodes.length - 1; i >= 0; --i) {
                         DOMManipulator.removeElement(nodes[i]);
                         nodes.splice(i, 1);
+                        if (listenersStorage) {
+                            self._clearFromListeners(listenersStorage[i]);
+                            listenersStorage.splice(i, 1);
+                        }
                     }
+                    // Redraw
                     newObject = newObject || accessor.getPropertyValue(self._context, propPath);
                     var newNode;
-                    for (var propName in iterable) {
+                    for (var propName in newObject) {
                         if (!newObject.hasOwnProperty(propName) || 'function' === typeof newObject[propName]) {
                             continue;
                         }
@@ -429,8 +475,12 @@ Fusioner.prototype = {
                             aliases[alias] = '"'+propName+'"';
                         }
                         newNode = element.cloneNode(true);
-                        self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
                         nodes.push(newNode);
+                        if (listenersStorage) {
+                            listeners = listeners || [];
+                            listenersStorage.push(listeners);
+                        }
+                        self._bindElement(newNode, aliases, tagName, listeners);
                     }
                     DOMManipulator.insertElements(nodes, parent, position);
                 };
@@ -447,7 +497,7 @@ Fusioner.prototype = {
                     if (number === oldNumber) {
                         return;
                     }
-                    var i, len;
+                    var i;
                     var newNode;
                     var newNodes = [];
                     if (number > oldNumber) {
@@ -455,16 +505,22 @@ Fusioner.prototype = {
                             newNode = element.cloneNode(true);
                             newNodes.push(newNode);
                             nodes.push(newNode);
+                            aliases[alias] = i+'';
+                            if (listenersStorage) {
+                                listeners = [];
+                                listenersStorage.push(listeners);
+                            }
+                            self._bindElement(newNode, aliases, tagName, listeners);
                         }
                         DOMManipulator.insertElements(newNodes, parent, position);
-                        for (i = 0, len = newNodes.length; i < len; ++i) {
-                            aliases[alias] = (oldNumber+i)+'';
-                            self._bind(self._replaceAliasesInElement(newNodes[i], aliases), aliases);
-                        }
                     } else {
                         for (i = oldNumber; i >= number; --i) {
                             DOMManipulator.removeElement(nodes[i]);
                             nodes.splice(i, 1);
+                            if (listenersStorage) {
+                                self._clearFromListeners(listenersStorage[i]);
+                                listenersStorage.splice(i, 1);
+                            }
                         }
                     }
                     oldNumber = number;
@@ -509,7 +565,7 @@ Fusioner.prototype = {
                 self._init.push(function () {
                     updateValue(accessor.getPropertyValue(self._context, propPath));
                 });
-                this._on('change', prop, updateValue);
+                this._on('change', prop, updateValue, listeners);
                 // Trigger model in case of inner change
                 events.on('change', element, function (e) {
                     var target = e.target || e.srcElement;
@@ -531,7 +587,7 @@ Fusioner.prototype = {
                     element.value = null !== newValue ? newValue : '';
                 };
                 updateValue(accessor.getPropertyValue(this._context, propPath));
-                this._on('change', prop, updateValue);
+                this._on('change', prop, updateValue, listeners);
                 // Trigger model in case of inner change
                 eventName = 'oninput' in element ? 'input' : 'keyup, keypress';
                 events.on(eventName, element, function (e) {
@@ -580,7 +636,7 @@ Fusioner.prototype = {
                 }
                 self._extractContextProperties(attr).forEach(function (prop) {
                     if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
-                        self._on('change', prop, handleInsertion);
+                        self._on('change', prop, handleInsertion, listeners);
                     }
                 });
             }(element.getAttribute('data-if')));
@@ -601,7 +657,7 @@ Fusioner.prototype = {
                 handleDisplaying();
                 self._extractContextProperties(attr).forEach(function (prop) {
                     if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
-                        self._on('change', prop, handleDisplaying);
+                        self._on('change', prop, handleDisplaying, listeners);
                     }
                 });
             }(element.getAttribute('data-show')));
@@ -631,7 +687,7 @@ Fusioner.prototype = {
                             markers.forEach(function (marker) {
                                 self._extractContextProperties(marker.inner).forEach(function (prop) {
                                     if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
-                                        self._on('change', prop, updateAttribute);
+                                        self._on('change', prop, updateAttribute, listeners);
                                     }
                                 });
                             });
@@ -643,11 +699,11 @@ Fusioner.prototype = {
 
         // Recursive binding
         for (i = element.childNodes.length - 1; i >= 0; --i) {
-            this._bind(element.childNodes[i], aliases);
+            this._bind(element.childNodes[i], aliases, listeners);
         }
     },
 
-    _bindTextNode: function (element, aliases) {
+    _bindTextNode: function (element, aliases, listeners) {
         var contentProp = element.textContent ? 'textContent' : 'nodeValue'; // IE8 polyfill
         var content = element[contentProp].trim();
         if (content) {
@@ -666,7 +722,7 @@ Fusioner.prototype = {
                 for (var i = 0, len = markers.length; i < len; ++i) {
                     this._extractContextProperties(markers[i].inner).forEach(function (prop) {
                         if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
-                            self._on('change', prop, updateContent);
+                            self._on('change', prop, updateContent, listeners);
                         }
                     });
                 }
@@ -722,7 +778,7 @@ Fusioner.prototype = {
                     // New collection smaller than old collection
                     } else {
                         for (i = components.length - 1, len = newCollection.length - 1; i > len; --i) {
-                            components[i].revoke();
+                            components[i].destroy();
                             components.splice(i, 1)[0] = null;
                         }
                     }
@@ -734,7 +790,7 @@ Fusioner.prototype = {
             } else if (iterable instanceof Object) {
                 var updateComponentsForObject = function (newObject) {
                     for (var i = components.length - 1; i >= 0; --i) {
-                        components[i].revoke();
+                        components[i].destroy();
                         components.splice(i, 1)[0] = null;
                     }
                     newObject = newObject || accessor.getPropertyValue(self._context, propPath);
@@ -768,7 +824,7 @@ Fusioner.prototype = {
                         }
                     } else if (newNumber < components.length) {
                         for (i = components.length - 1; i > newNumber; --i) {
-                            components[i].revoke();
+                            components[i].destroy();
                             components.splice(i, 1)[0] = null;
                         }
                     }
@@ -852,7 +908,7 @@ Fusioner.prototype = {
             fragments = eventPath.split(':');
             event = fragments[1];
             prop = this._buildPropFromPath(fragments[0]);
-            this._off(event, prop);
+            this._clear(event, prop);
         }
     }
 };
