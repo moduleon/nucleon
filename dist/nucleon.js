@@ -496,8 +496,12 @@ var Model = function (obj) {
     accessor.duplicateProperties(obj, this);
     watch(this, null, es);
 
-    this.on = function (event, path, callback) {
-        es.on(event, path, callback);
+    this.on = function (event, path, callback, prependArgs, caller) {
+        es.on(event, path, callback, prependArgs, caller);
+    };
+
+    this.off = function (event, path, callback) {
+        es.off(event, path, callback);
     };
 
     this.trigger = function (event, path, newValue) {
@@ -1069,14 +1073,18 @@ View.prototype = {
     _parent: null,
     _components: null,
     // Event callbacks
+    _onCreate: null,
+    _onCreated: null,
     _onRender: null,
     _onRendered: null,
     _onUpdate: null,
     _onUpdated: null,
     _onRevoke: null,
     _onRevoked: null,
+    _onDestroy: null,
+    _onDestroyed: null,
     // Inner vars
-    _elements: [],
+    _elements: null,
     _position: null,
     _fusioner: null,
     _rendered: false,
@@ -1142,9 +1150,10 @@ View.prototype = {
     },
 
     _prepareElements: function () {
-        if (this._elements.length) {
+        if (null !== this._elements) {
             return;
         }
+        this._elements = [];
 
         var self = this;
 
@@ -1219,8 +1228,19 @@ View.prototype = {
     },
 
     _mount: function () {
+        var create = false;
+        if (null === this._elements) {
+            create = true;
+            // Call onCreate callback
+            if ('function' === typeof this._onCreate) {
+                this._onCreate();
+            }
+        }
         this._prepareElements();
         this._buildFusioner();
+        if (create && 'function' === typeof this._onCreated) {
+            this._onCreated();
+        }
     },
 
     /**
@@ -1299,6 +1319,22 @@ View.prototype = {
     },
 
     /**
+     * Revoke and remove a view instance.
+     */
+    destroy: function () {
+        // Call onDestroy callback
+        if ('function' === typeof this._onDestroy) {
+            this._onDestroy();
+        }
+        this.revoke();
+        this._fusioner.destroy();
+        // Call onDestroyed callback
+        if ('function' === typeof this._onDestroyed) {
+            this._onDestroyed();
+        }
+    },
+
+    /**
      * Get the view execution context
      *
      * @return {null|Model}
@@ -1326,30 +1362,29 @@ View.prototype = {
     },
 
     /**
-     * Clone view with a new config.
+     * Clone view with a new config. Used for components.
      *
-     * @param  {object} newConfig
+     * @param  {object} config
      *
      * @return {View}
      */
     clone: function (config) {
         this._prepareElements();
         config = config || {};
+        config.context = config.context || {};
+        config.parent = config.parent || this._parent;
         config.root = config.root || this._root;
-        config.template = config.template || this._template;
-        config.templateUrl = config.templateUrl || this._templateUrl;
+        config.position = config.position || this._position;
         config.elements = [];
         for (var i = 0, len = this._elements.length; i < len; ++i) {
             config.elements.push(this._elements[i].cloneNode(true));
         }
-        config.parent = config.parent || this._parent;
         config.onRender = config.onRender || this.onRender;
         config.onRendered = config.onRendered || this._onRendered;
         config.onUpdate = config.onUpdate || this._onUpdate;
         config.onUpdated = config.onUpdated || this._onUpdated;
         config.onRevoke = config.onRevoke || this._onRevoke;
         config.onRevoked = config.onRevoked || this._onRevoked;
-        config.context = config.context || {};
 
         return new View(config);
     }
@@ -1447,20 +1482,36 @@ EventSystem.prototype = {
         });
     },
 
+    _hasCallback: function (event, target, callback) {
+        for (var i = 0, len = this._callbacks[target][event].length; i < len; ++i) {
+            if (this._callbacks[target][event][i].callback === callback) {
+                return i;
+            }
+        }
+
+        return false;
+    },
+
     /**
      * Add callback to a target event.
      *
-     * @param  {string}   event
-     * @param  {string}   target
-     * @param  {Function} callback
+     * @param  {String}       event
+     * @param  {String}       target
+     * @param  {Function}     callback
+     * @param  {Array|null}   prependArgs  defines prepending arguments to inject on trigger
+     * @param  {Object|null}  caller       defines the object which should be be "this" in callback
      */
-    on: function (event, target, callback) {
+    on: function (event, target, callback, prependArgs, caller) {
         this._callbacks[target] = this._callbacks[target] || {};
         var events = this._extractEvents(event);
         for (var i = 0, len = events.length; i < len; ++i) {
             this._callbacks[target][events[i]] = this._callbacks[target][events[i]] || [];
-            if (this._callbacks[target][events[i]].indexOf(callback) === -1) {
-                this._callbacks[target][events[i]].push(callback);
+            if (false === this._hasCallback(events[i], target, callback)) {
+                this._callbacks[target][events[i]].push({
+                    callback: callback,
+                    prependArgs: prependArgs || [],
+                    caller: caller || this
+                });
             }
         }
 
@@ -1470,8 +1521,8 @@ EventSystem.prototype = {
     /**
      * Remove callback from a target event.
      *
-     * @param  {string}   event
-     * @param  {string}   target
+     * @param  {String}   event
+     * @param  {String}   target
      * @param  {Function} callback
      */
     off: function (event, target, callback) {
@@ -1481,8 +1532,8 @@ EventSystem.prototype = {
                 if (!this._callbacks[target][events[i]]) {
                     continue;
                 }
-                var index = this._callbacks[target][events[i]].indexOf(callback);
-                if (index !== -1) {
+                var index = this._hasCallback(events[i], target, callback);
+                if (false !== index) {
                     this._callbacks[target][events[i]].splice(index, 1);
                 }
             }
@@ -1494,22 +1545,22 @@ EventSystem.prototype = {
     /**
      * Trigger a target event.
      *
-     * @param  {string} event
-     * @param  {string} target
+     * @param  {String} event
+     * @param  {String} target
      */
     trigger: function (event, target) {
         if (this._callbacks[target]) {
             var events = this._extractEvents(event);
-            var j;
-            var len2;
             var args = Array.prototype.slice.call(arguments, 2);
-            for (var i = 0, len = events.length; i < len; ++i) {
+            var current;
+            for (var i = 0, len = events.length, j, len2; i < len; ++i) {
                 if (!this._callbacks[target][events[i]]) {
                     continue;
                 }
                 for (j = 0, len2 = this._callbacks[target][events[i]].length; j < len2; ++j) {
+                    current = this._callbacks[target][events[i]][j];
                     // If listener returns false, stop propagating
-                    if (false === this._callbacks[target][events[i]][j].apply(this, args)) {
+                    if (false === current.callback.apply(current.caller, current.prependArgs.concat(args))) {
                         break;
                     }
                 }
@@ -1520,7 +1571,7 @@ EventSystem.prototype = {
     },
 
     /**
-     * Remove all _callbacks.
+     * Remove all callbacks.
      */
     clear: function () {
         this._callbacks = {};
@@ -2395,7 +2446,7 @@ module.exports = pages;
 /**
  * This is the main file building the nucleon app object.
  *
- * .author  Kevin Marcachi <kevin.marcachi.gmail.com>
+ * @author  Kevin Marcachi <kevin.marcachi.gmail.com>
  * @package nucleon-js
  */
 module.exports = {
@@ -3023,7 +3074,7 @@ var DELIMITERS_PATTERN = /\{\{|\}\}/g;
 var PORTIONS_PATTERN = /[ |(|)|{|}|[|]|,|:|\+|"|']/g;
 
 /**
- * Fusioner instances create a binding between an html element and a context.
+ * Fusioner instances create a binding between html elements and a context.
  *
  * @constructor
  * @param {object} config
@@ -3034,7 +3085,7 @@ var PORTIONS_PATTERN = /[ |(|)|{|}|[|]|,|:|\+|"|']/g;
  */
 var Fusioner = function (config) {
     this._init = [];
-    this._waiting = [];
+    this._waiting = {};
     this._events = {};
     if (false === config.elements instanceof Array) {
         config.elements = [config.elements];
@@ -3082,24 +3133,38 @@ Fusioner.prototype = {
     },
 
     _extractContextProperties: function (string) {
+        var prop;
         var props = [];
         var portions = string.split(PORTIONS_PATTERN);
-        for (var i = 0, len = portions.length, fragments, model; i < len; ++i) {
+        for (var i = 0, len = portions.length; i < len; ++i) {
             if (!portions[i]) {
                 continue;
             }
-            fragments = portions[i].split('.');
-            model = fragments.shift();
-            if (undefined !== this._context[model]) {
-                if (false === this._context[model] instanceof Model) {
-                    fragments.unshift(model);
-                    model = null;
-                }
-                props.push({ model: model, path: fragments.join('.').replace('.length', '') });
+            prop = this._buildPropFromPath(portions[i]);
+            if (prop) {
+                props.push(this._buildPropFromPath(portions[i]));
             }
         }
 
         return props;
+    },
+
+    _buildPropFromPath: function (string) {
+        var fragments = string.split('.');
+        var model = fragments.shift();
+        if (undefined == this._context[model]) {
+            return;
+        }
+        if (false === this._context[model] instanceof Model) {
+            fragments.unshift(model);
+            model = null;
+        }
+
+        return { model: model, path: fragments.join('.').replace('.length', '') };
+    },
+
+    _getPathFromProp: function (prop) {
+        return (prop.model ? prop.model + (prop.path ? '.': '') : '') + prop.path;
     },
 
     _replaceAliases: function (string, aliases) {
@@ -3145,23 +3210,43 @@ Fusioner.prototype = {
         return !result && 0 !== result ? '' : result;
     },
 
-    _getPropPath: function (prop) {
-        return (prop.model ? prop.model + (prop.path ? '.': '') : '') + prop.path;
-    },
-
-    _on: function (event, prop, callback) {
-        var propPath = this._getPropPath(prop);
+    _on: function (event, prop, callback, listeners) {
+        var propPath = this._getPathFromProp(prop);
         var eventPath = propPath+':'+event;
         // Register a unique event listener in model for prop
         if (!this._events[eventPath]) {
             this._events[eventPath] = [];
             var target = prop.model ? this._context[prop.model] : this._context;
-            var self = this;
-            target.on(event, prop.path, function (newValue) {
-                self._dispatch(event, prop, newValue);
-            });
+            target.on(event, prop.path, this._dispatch, [eventPath], this);
         }
         this._events[eventPath].push(callback);
+        if (listeners) {
+            this._saveInListeners(event, prop, callback, listeners);
+        }
+    },
+
+    _off: function (event, prop, callback) {
+        var propPath = this._getPathFromProp(prop);
+        var eventPath = propPath+':'+event;
+        if (this._events[eventPath]) {
+            var index = this._events[eventPath].indexOf(callback);
+            if (-1 !== index) {
+                this._events[eventPath].splice(index, 1);
+                if (0 === this._events[eventPath].length) {
+                    this._clear(event, prop);
+                }
+            }
+        }
+    },
+
+    _clear: function (event, prop) {
+        var propPath = this._getPathFromProp(prop);
+        var eventPath = propPath+':'+event;
+        if (this._events[eventPath]) {
+            var target = prop.model ? this._context[prop.model] : this._context;
+            target.off(event, propPath, this._dispatch);
+        }
+        this._events[eventPath] = null;
     },
 
     _trigger: function (event, prop, newValue) {
@@ -3169,8 +3254,7 @@ Fusioner.prototype = {
         target.trigger(event, prop.path, newValue);
     },
 
-    _dispatch: function (event, prop, newValue) {
-        var eventPath = this._getPropPath(prop)+':'+event;
+    _dispatch: function (eventPath, newValue) {
         if (this._events[eventPath].length > 0) {
             var i;
             var len;
@@ -3190,12 +3274,26 @@ Fusioner.prototype = {
             // Elsewise, store them in a queue
             } else {
                 for (i = 0, len = this._events[eventPath].length; i < len; ++i) {
-                    if (this._waiting.indexOf(this._events[eventPath][i]) !== -1) {
+                    this._waiting[eventPath] = this._waiting[eventPath] || [];
+                    if (this._waiting[eventPath].indexOf(this._events[eventPath][i]) !== -1) {
                         continue;
                     }
-                    this._waiting.push(this._events[eventPath][i]);
+                    this._waiting[eventPath].push(this._events[eventPath][i]);
                 }
             }
+        }
+    },
+
+    _saveInListeners: function (event, prop, callback, listeners) {
+        listeners.push(event, prop, callback);
+    },
+
+    _clearListeners: function (listeners) {
+        if (!listeners || !listeners.length) {
+            return;
+        }
+        for (var i = 0, len = listeners.length - 3; i <= len; i += 3) {
+            this._off(listeners[i], listeners[i + 1], listeners[i + 2]);
         }
     },
 
@@ -3241,7 +3339,6 @@ Fusioner.prototype = {
                     (function (name) {
                         // Component to view changes
                         component._fusioner._on('change', component._fusioner._extractContextProperties(name)[0], function (newValue) {
-                            // console.log('')
                             // Handle missing values (callback on queue)
                             newValue = newValue || accessor.getPropertyValue(component._context, name);
                             accessor.setPropertyValue(self._context, references[name], newValue);
@@ -3260,7 +3357,7 @@ Fusioner.prototype = {
         // Handle conditional rendering
         if (element.hasAttribute('data-if')) {
             expr = this._replaceAliases(element.getAttribute('data-if'), aliases);
-            var handleInsertion = function () {
+            var handleComponentInsertion = function () {
                 var result = processor.process(expr, self._context);
                 if (undefined === result || false === result || null === result || '' === result) {
                     component.revoke();
@@ -3268,10 +3365,10 @@ Fusioner.prototype = {
                     component.render();
                 }
             };
-            handleInsertion();
+            handleComponentInsertion();
             this._extractContextProperties(expr).forEach(function (prop) {
-                if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                    self._on('change', prop, handleInsertion);
+                if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
+                    self._on('change', prop, handleComponentInsertion);
                 }
             });
         } else {
@@ -3292,8 +3389,7 @@ Fusioner.prototype = {
         }
     },
 
-    _bind: function (element, aliases) {
-
+    _bind: function (element, aliases, listeners) {
         if (!element) {
             return;
         }
@@ -3322,17 +3418,17 @@ Fusioner.prototype = {
             }
 
             // Other
-            return this._bindElement(element, aliases, tagName);
+            return this._bindElement(element, aliases, tagName, listeners);
 
         // TextNode
         } else if (3 === element.nodeType) {
-            return this._bindTextNode(element, aliases);
+            return this._bindTextNode(element, aliases, listeners);
         }
 
         return element;
     },
 
-    _bindElement: function (element, aliases, tagName) {
+    _bindElement: function (element, aliases, tagName, listeners) {
 
         var self = this;
         var attr;
@@ -3357,7 +3453,7 @@ Fusioner.prototype = {
             }
             var expr = this._replaceAliases(attr.replace(/.* in/, '').trim(), aliases);
             var props = this._extractContextProperties(expr);
-            propPath = props.length ? this._getPropPath(props[0]) : null;
+            propPath = props.length ? this._getPathFromProp(props[0]) : null;
 
             // Save data needed for insertion of loop elements.
             var parent = element.parentNode || this._view._getRoot();
@@ -3366,6 +3462,7 @@ Fusioner.prototype = {
             // Put element aside. Will be used as a model for loop elements.
             this._removeElement(element);
             element.removeAttribute('data-for');
+            tagName = element.tagName.toLowerCase();
 
             var iterable = processor.process(expr, this._context);
             if (false === this._isIterable(iterable)) {
@@ -3373,10 +3470,13 @@ Fusioner.prototype = {
             }
 
             var nodes = [];
+            if (!listeners) {
+                var listenersStorage = [];
+            }
 
             // For i in collection length
             if (iterable instanceof Collection) {
-                var handleLoopForCollection = function (newCollection) {
+                var updateLoopForCollection = function (newCollection) {
                     var i;
                     var len;
                     newCollection = newCollection || accessor.getPropertyValue(self._context, propPath);
@@ -3391,30 +3491,43 @@ Fusioner.prototype = {
                             newNode = element.cloneNode(true);
                             nodes.push(newNode);
                             newNodes.push(newNode);
-
-                            self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
+                            if (listenersStorage) {
+                                listeners = [];
+                                listenersStorage.push(listeners);
+                            }
+                            self._bindElement(self._replaceAliasesInElement(newNode, aliases), aliases, tagName, listeners);
                         }
                         DOMManipulator.insertElements(newNodes, parent, position + (nodes.length - newNodes.length));
                     } else if (newCollection.length < nodes.length) {
                         for (i = nodes.length, len = newCollection.length; i >= len; --i) {
                             DOMManipulator.removeElement(nodes[i]);
                             nodes.splice(i, 1);
+                            if (listenersStorage) {
+                                self._clearListeners(listenersStorage[i]);
+                                listenersStorage.splice(i, 1);
+                            }
                         }
                     }
                 };
-                handleLoopForCollection(iterable);
-                this._on('change', props[0], handleLoopForCollection);
+                updateLoopForCollection(iterable);
+                this._on('change', props[0], updateLoopForCollection);
 
             // For name in object
             } else if (iterable instanceof Object) {
                 var updateLoopForObject = function (newObject) {
+                    // Object changed, clearing
                     for (var i = nodes.length - 1; i >= 0; --i) {
                         DOMManipulator.removeElement(nodes[i]);
                         nodes.splice(i, 1);
+                        if (listenersStorage) {
+                            self._clearListeners(listenersStorage[i]);
+                            listenersStorage.splice(i, 1);
+                        }
                     }
+                    // Redraw
                     newObject = newObject || accessor.getPropertyValue(self._context, propPath);
                     var newNode;
-                    for (var propName in iterable) {
+                    for (var propName in newObject) {
                         if (!newObject.hasOwnProperty(propName) || 'function' === typeof newObject[propName]) {
                             continue;
                         }
@@ -3425,8 +3538,12 @@ Fusioner.prototype = {
                             aliases[alias] = '"'+propName+'"';
                         }
                         newNode = element.cloneNode(true);
-                        self._bind(self._replaceAliasesInElement(newNode, aliases), aliases);
                         nodes.push(newNode);
+                        if (listenersStorage) {
+                            listeners = listeners || [];
+                            listenersStorage.push(listeners);
+                        }
+                        self._bindElement(self._replaceAliasesInElement(newNode, aliases), aliases, tagName, listeners);
                     }
                     DOMManipulator.insertElements(nodes, parent, position);
                 };
@@ -3438,12 +3555,12 @@ Fusioner.prototype = {
             // For i in number
             } else if ('number' === typeof iterable) {
                 var oldNumber = 0;
-                var handleLoopForNumber = function (number) {
+                var updateLoopForNumber = function (number) {
                     number = number || processor.process(expr, self._context);
                     if (number === oldNumber) {
                         return;
                     }
-                    var i, len;
+                    var i;
                     var newNode;
                     var newNodes = [];
                     if (number > oldNumber) {
@@ -3451,26 +3568,32 @@ Fusioner.prototype = {
                             newNode = element.cloneNode(true);
                             newNodes.push(newNode);
                             nodes.push(newNode);
+                            aliases[alias] = i+'';
+                            if (listenersStorage) {
+                                listeners = [];
+                                listenersStorage.push(listeners);
+                            }
+                            self._bindElement(self._replaceAliasesInElement(newNode, aliases), aliases, tagName, listeners);
                         }
                         DOMManipulator.insertElements(newNodes, parent, position);
-                        for (i = 0, len = newNodes.length; i < len; ++i) {
-                            aliases[alias] = (oldNumber+i)+'';
-                            self._bind(self._replaceAliasesInElement(newNodes[i], aliases), aliases);
-                        }
                     } else {
                         for (i = oldNumber; i >= number; --i) {
                             DOMManipulator.removeElement(nodes[i]);
                             nodes.splice(i, 1);
+                            if (listenersStorage) {
+                                self._clearListeners(listenersStorage[i]);
+                                listenersStorage.splice(i, 1);
+                            }
                         }
                     }
                     oldNumber = number;
                 };
                 if (props.length > 0) {
                     for (i = 0, len = props.length; i < len; ++i) {
-                        this._on('change', props[i], function () { handleLoopForNumber(); });
+                        this._on('change', props[i], updateLoopForNumber);
                     }
                 }
-                handleLoopForNumber(iterable);
+                updateLoopForNumber(iterable);
             }
 
             return;
@@ -3485,7 +3608,7 @@ Fusioner.prototype = {
             }
 
             prop = prop[0];
-            propPath = this._getPropPath(prop);
+            propPath = this._getPathFromProp(prop);
 
             var updateValue;
             if ('select' === tagName || ('input' === tagName && ('radio' === element.type || 'checkbox' === element.type))) {
@@ -3505,7 +3628,7 @@ Fusioner.prototype = {
                 self._init.push(function () {
                     updateValue(accessor.getPropertyValue(self._context, propPath));
                 });
-                this._on('change', prop, updateValue);
+                this._on('change', prop, updateValue, listeners);
                 // Trigger model in case of inner change
                 events.on('change', element, function (e) {
                     var target = e.target || e.srcElement;
@@ -3527,7 +3650,7 @@ Fusioner.prototype = {
                     element.value = null !== newValue ? newValue : '';
                 };
                 updateValue(accessor.getPropertyValue(this._context, propPath));
-                this._on('change', prop, updateValue);
+                this._on('change', prop, updateValue, listeners);
                 // Trigger model in case of inner change
                 eventName = 'oninput' in element ? 'input' : 'keyup, keypress';
                 events.on(eventName, element, function (e) {
@@ -3575,8 +3698,8 @@ Fusioner.prototype = {
                     handleInsertion();
                 }
                 self._extractContextProperties(attr).forEach(function (prop) {
-                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                        self._on('change', prop, handleInsertion);
+                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
+                        self._on('change', prop, handleInsertion, listeners);
                     }
                 });
             }(element.getAttribute('data-if')));
@@ -3596,8 +3719,8 @@ Fusioner.prototype = {
                 };
                 handleDisplaying();
                 self._extractContextProperties(attr).forEach(function (prop) {
-                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                        self._on('change', prop, handleDisplaying);
+                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
+                        self._on('change', prop, handleDisplaying, listeners);
                     }
                 });
             }(element.getAttribute('data-show')));
@@ -3626,8 +3749,8 @@ Fusioner.prototype = {
                             updateAttribute();
                             markers.forEach(function (marker) {
                                 self._extractContextProperties(marker.inner).forEach(function (prop) {
-                                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                                        self._on('change', prop, updateAttribute);
+                                    if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
+                                        self._on('change', prop, updateAttribute, listeners);
                                     }
                                 });
                             });
@@ -3639,11 +3762,11 @@ Fusioner.prototype = {
 
         // Recursive binding
         for (i = element.childNodes.length - 1; i >= 0; --i) {
-            this._bind(element.childNodes[i], aliases);
+            this._bind(element.childNodes[i], aliases, listeners);
         }
     },
 
-    _bindTextNode: function (element, aliases) {
+    _bindTextNode: function (element, aliases, listeners) {
         var contentProp = element.textContent ? 'textContent' : 'nodeValue'; // IE8 polyfill
         var content = element[contentProp].trim();
         if (content) {
@@ -3661,8 +3784,8 @@ Fusioner.prototype = {
                 updateContent();
                 for (var i = 0, len = markers.length; i < len; ++i) {
                     this._extractContextProperties(markers[i].inner).forEach(function (prop) {
-                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPropPath(prop))) {
-                            self._on('change', prop, updateContent);
+                        if ('function' !== typeof accessor.getPropertyValue(self._context, self._getPathFromProp(prop))) {
+                            self._on('change', prop, updateContent, listeners);
                         }
                     });
                 }
@@ -3696,7 +3819,7 @@ Fusioner.prototype = {
             }
 
             var props = this._extractContextProperties(expr);
-            var propPath = props.length ? this._getPropPath(props[0]) : null;
+            var propPath = props.length ? this._getPathFromProp(props[0]) : null;
 
             var components = [];
 
@@ -3718,7 +3841,7 @@ Fusioner.prototype = {
                     // New collection smaller than old collection
                     } else {
                         for (i = components.length - 1, len = newCollection.length - 1; i > len; --i) {
-                            components[i].revoke();
+                            components[i].destroy();
                             components.splice(i, 1)[0] = null;
                         }
                     }
@@ -3728,9 +3851,9 @@ Fusioner.prototype = {
 
             // For prop name in object
             } else if (iterable instanceof Object) {
-                var updateComponentForObject = function (newObject) {
+                var updateComponentsForObject = function (newObject) {
                     for (var i = components.length - 1; i >= 0; --i) {
-                        components[i].revoke();
+                        components[i].destroy();
                         components.splice(i, 1)[0] = null;
                     }
                     newObject = newObject || accessor.getPropertyValue(self._context, propPath);
@@ -3747,14 +3870,14 @@ Fusioner.prototype = {
                         components.push(self._createComponent(element, aliases, self._components[tagName], parentNode));
                     }
                 };
-                updateComponentForObject(iterable);
+                updateComponentsForObject(iterable);
                 if (props.length) {
-                    this._on('change', props[0], updateComponentForObject);
+                    this._on('change', props[0], updateComponentsForObject);
                 }
 
             // For i in number
             } else if ('number' === typeof iterable) {
-                var updateComponentForNumber = function (newNumber) {
+                var updateComponentsForNumber = function (newNumber) {
                     newNumber = newNumber || processor.process(expr, self._context);
                     var i;
                     if (newNumber > components.length) {
@@ -3764,19 +3887,20 @@ Fusioner.prototype = {
                         }
                     } else if (newNumber < components.length) {
                         for (i = components.length - 1; i > newNumber; --i) {
-                            components[i].revoke();
+                            components[i].destroy();
                             components.splice(i, 1)[0] = null;
                         }
                     }
                 };
-                updateComponentForNumber(iterable);
+                updateComponentsForNumber(iterable);
                 if (props.length === 1) {
-                    this._on('change', props[0], updateComponentForNumber);
+                    this._on('change', props[0], updateComponentsForNumber);
                 } else if (props.length > 1) {
+                    var refreshComponentsForNumber = function () {
+                        updateComponentsForNumber(); // Don't pass value, which rely on multiple context values. Force recalculate.
+                    };
                     for (var i = props.length - 1; i >= 0; --i) {
-                        this._on('change', props[i], function () {
-                            updateComponentForNumber(); // Don't pass value, which rely on multiple context values. Force recalculate.
-                        });
+                        this._on('change', props[i], refreshComponentsForNumber);
                     }
                 }
             }
@@ -3792,6 +3916,15 @@ Fusioner.prototype = {
         return true === thing instanceof Collection || true === thing instanceof Object || 'number' === typeof thing;
     },
 
+    _hasWaitingChanges: function () {
+        for (var prop in this._waiting) {
+            if (this._waiting.hasOwnProperty(prop)) {
+                return true;
+            }
+        }
+        return false;
+    },
+
     /**
      * Apply all changes waiting to be applied in element.
      */
@@ -3804,19 +3937,41 @@ Fusioner.prototype = {
             }
             this._init = [];
         }
-        if (this._waiting.length > 0) {
+        if (this._hasWaitingChanges()) {
             // Call onUpdate callback
             if ('function' === typeof this._onUpdate) {
                 this._onUpdate();
             }
-            for (i = 0, len = this._waiting.length; i < len; ++i) {
-                this._waiting[i]();
+            var newVal;
+            for (var eventPath in this._waiting) {
+                if (!this._waiting.hasOwnProperty(eventPath)) {
+                    continue;
+                }
+                newVal = accessor.getPropertyValue(this._context, eventPath.split(':')[0]);
+                for (i = 0, len = this._waiting[eventPath].length; i < len; ++i) {
+                    this._waiting[eventPath][i](newVal);
+                }
             }
-            this._waiting = [];
+            this._waiting = {};
             // Call onUpdated callback
             if ('function' === typeof this._onUpdated) {
                 this._onUpdated();
             }
+        }
+    },
+
+    /**
+     * Destroy fusioner.
+     */
+    destroy: function () {
+        var fragments;
+        var event;
+        var prop;
+        for (var eventPath in this._events) {
+            fragments = eventPath.split(':');
+            event = fragments[1];
+            prop = this._buildPropFromPath(fragments[0]);
+            this._clear(event, prop);
         }
     }
 };
