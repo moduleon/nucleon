@@ -225,7 +225,7 @@ Fusioner.prototype = {
         listeners.push(event, prop, callback);
     },
 
-    _clearFromListeners: function (listeners) {
+    _clearListeners: function (listeners) {
         if (!listeners || !listeners.length) {
             return;
         }
@@ -432,7 +432,7 @@ Fusioner.prototype = {
                                 listeners = [];
                                 listenersStorage.push(listeners);
                             }
-                            self._bindElement(newNode, aliases, tagName, listeners);
+                            self._bindElement(self._replaceAliasesInElement(newNode, aliases), aliases, tagName, listeners);
                         }
                         DOMManipulator.insertElements(newNodes, parent, position + (nodes.length - newNodes.length));
                     } else if (newCollection.length < nodes.length) {
@@ -440,7 +440,7 @@ Fusioner.prototype = {
                             DOMManipulator.removeElement(nodes[i]);
                             nodes.splice(i, 1);
                             if (listenersStorage) {
-                                self._clearFromListeners(listenersStorage[i]);
+                                self._clearListeners(listenersStorage[i]);
                                 listenersStorage.splice(i, 1);
                             }
                         }
@@ -457,7 +457,7 @@ Fusioner.prototype = {
                         DOMManipulator.removeElement(nodes[i]);
                         nodes.splice(i, 1);
                         if (listenersStorage) {
-                            self._clearFromListeners(listenersStorage[i]);
+                            self._clearListeners(listenersStorage[i]);
                             listenersStorage.splice(i, 1);
                         }
                     }
@@ -480,7 +480,7 @@ Fusioner.prototype = {
                             listeners = listeners || [];
                             listenersStorage.push(listeners);
                         }
-                        self._bindElement(newNode, aliases, tagName, listeners);
+                        self._bindElement(self._replaceAliasesInElement(newNode, aliases), aliases, tagName, listeners);
                     }
                     DOMManipulator.insertElements(nodes, parent, position);
                 };
@@ -510,7 +510,7 @@ Fusioner.prototype = {
                                 listeners = [];
                                 listenersStorage.push(listeners);
                             }
-                            self._bindElement(newNode, aliases, tagName, listeners);
+                            self._bindElement(self._replaceAliasesInElement(newNode, aliases), aliases, tagName, listeners);
                         }
                         DOMManipulator.insertElements(newNodes, parent, position);
                     } else {
@@ -518,7 +518,7 @@ Fusioner.prototype = {
                             DOMManipulator.removeElement(nodes[i]);
                             nodes.splice(i, 1);
                             if (listenersStorage) {
-                                self._clearFromListeners(listenersStorage[i]);
+                                self._clearListeners(listenersStorage[i]);
                                 listenersStorage.splice(i, 1);
                             }
                         }
