@@ -1,7 +1,7 @@
 /**
  * This is the main file building the nucleon app object.
  *
- * .author  Kevin Marcachi <kevin.marcachi.gmail.com>
+ * @author  Kevin Marcachi <kevin.marcachi.gmail.com>
  * @package nucleon-js
  */
 module.exports = {

@@ -28,20 +28,36 @@ EventSystem.prototype = {
         });
     },
 
+    _hasCallback: function (event, target, callback) {
+        for (var i = 0, len = this._callbacks[target][event].length; i < len; ++i) {
+            if (this._callbacks[target][event][i].callback === callback) {
+                return i;
+            }
+        }
+
+        return false;
+    },
+
     /**
      * Add callback to a target event.
      *
-     * @param  {string}   event
-     * @param  {string}   target
-     * @param  {Function} callback
+     * @param  {String}       event
+     * @param  {String}       target
+     * @param  {Function}     callback
+     * @param  {Array|null}   prependArgs  defines prepending arguments to inject on trigger
+     * @param  {Object|null}  caller       defines the object which should be be "this" in callback
      */
-    on: function (event, target, callback) {
+    on: function (event, target, callback, prependArgs, caller) {
         this._callbacks[target] = this._callbacks[target] || {};
         var events = this._extractEvents(event);
         for (var i = 0, len = events.length; i < len; ++i) {
             this._callbacks[target][events[i]] = this._callbacks[target][events[i]] || [];
-            if (this._callbacks[target][events[i]].indexOf(callback) === -1) {
-                this._callbacks[target][events[i]].push(callback);
+            if (false === this._hasCallback(events[i], target, callback)) {
+                this._callbacks[target][events[i]].push({
+                    callback: callback,
+                    prependArgs: prependArgs || [],
+                    caller: caller || this
+                });
             }
         }
 
@@ -51,8 +67,8 @@ EventSystem.prototype = {
     /**
      * Remove callback from a target event.
      *
-     * @param  {string}   event
-     * @param  {string}   target
+     * @param  {String}   event
+     * @param  {String}   target
      * @param  {Function} callback
      */
     off: function (event, target, callback) {
@@ -62,8 +78,8 @@ EventSystem.prototype = {
                 if (!this._callbacks[target][events[i]]) {
                     continue;
                 }
-                var index = this._callbacks[target][events[i]].indexOf(callback);
-                if (index !== -1) {
+                var index = this._hasCallback(events[i], target, callback);
+                if (false !== index) {
                     this._callbacks[target][events[i]].splice(index, 1);
                 }
             }
@@ -75,22 +91,22 @@ EventSystem.prototype = {
     /**
      * Trigger a target event.
      *
-     * @param  {string} event
-     * @param  {string} target
+     * @param  {String} event
+     * @param  {String} target
      */
     trigger: function (event, target) {
         if (this._callbacks[target]) {
             var events = this._extractEvents(event);
-            var j;
-            var len2;
             var args = Array.prototype.slice.call(arguments, 2);
-            for (var i = 0, len = events.length; i < len; ++i) {
+            var current;
+            for (var i = 0, len = events.length, j, len2; i < len; ++i) {
                 if (!this._callbacks[target][events[i]]) {
                     continue;
                 }
                 for (j = 0, len2 = this._callbacks[target][events[i]].length; j < len2; ++j) {
+                    current = this._callbacks[target][events[i]][j];
                     // If listener returns false, stop propagating
-                    if (false === this._callbacks[target][events[i]][j].apply(this, args)) {
+                    if (false === current.callback.apply(current.caller, current.prependArgs.concat(args))) {
                         break;
                     }
                 }
@@ -101,7 +117,7 @@ EventSystem.prototype = {
     },
 
     /**
-     * Remove all _callbacks.
+     * Remove all callbacks.
      */
     clear: function () {
         this._callbacks = {};

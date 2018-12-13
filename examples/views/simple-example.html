@@ -23,6 +23,12 @@
             template: '<div>{{ message }}<div>', // Template handled by the view
             context: {                           // Data available in template
                 message: 'Hello!'
+            },
+            onCreated: function () {
+                console.log(this._context.getListeners());
+            },
+            onDestroyed: function () {
+                console.log(this._context.getListeners());
             }
         });
 
@@ -40,7 +46,10 @@
         // For the example, let's now change variable value after 1 sec.
         // It will automatically update the view.
         setTimeout(function(){
-            view._context.message = 'Goodbye...'
+            view._context.message = 'Goodbye...';
+            setTimeout(function(){
+                view.destroy();
+            }, 1000);
         }, 1000);
     </script>
 </body>

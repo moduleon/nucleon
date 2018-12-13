@@ -31,14 +31,18 @@ View.prototype = {
     _parent: null,
     _components: null,
     // Event callbacks
+    _onCreate: null,
+    _onCreated: null,
     _onRender: null,
     _onRendered: null,
     _onUpdate: null,
     _onUpdated: null,
     _onRevoke: null,
     _onRevoked: null,
+    _onDestroy: null,
+    _onDestroyed: null,
     // Inner vars
-    _elements: [],
+    _elements: null,
     _position: null,
     _fusioner: null,
     _rendered: false,
@@ -104,9 +108,10 @@ View.prototype = {
     },
 
     _prepareElements: function () {
-        if (this._elements.length) {
+        if (null !== this._elements) {
             return;
         }
+        this._elements = [];
 
         var self = this;
 
@@ -181,8 +186,19 @@ View.prototype = {
     },
 
     _mount: function () {
+        var create = false;
+        if (null === this._elements) {
+            create = true;
+            // Call onCreate callback
+            if ('function' === typeof this._onCreate) {
+                this._onCreate();
+            }
+        }
         this._prepareElements();
         this._buildFusioner();
+        if (create && 'function' === typeof this._onCreated) {
+            this._onCreated();
+        }
     },
 
     /**
@@ -261,6 +277,22 @@ View.prototype = {
     },
 
     /**
+     * Revoke and remove a view instance.
+     */
+    destroy: function () {
+        // Call onDestroy callback
+        if ('function' === typeof this._onDestroy) {
+            this._onDestroy();
+        }
+        this.revoke();
+        this._fusioner.destroy();
+        // Call onDestroyed callback
+        if ('function' === typeof this._onDestroyed) {
+            this._onDestroyed();
+        }
+    },
+
+    /**
      * Get the view execution context
      *
      * @return {null|Model}
@@ -288,30 +320,29 @@ View.prototype = {
     },
 
     /**
-     * Clone view with a new config.
+     * Clone view with a new config. Used for components.
      *
-     * @param  {object} newConfig
+     * @param  {object} config
      *
      * @return {View}
      */
     clone: function (config) {
         this._prepareElements();
         config = config || {};
+        config.context = config.context || {};
+        config.parent = config.parent || this._parent;
         config.root = config.root || this._root;
-        config.template = config.template || this._template;
-        config.templateUrl = config.templateUrl || this._templateUrl;
+        config.position = config.position || this._position;
         config.elements = [];
         for (var i = 0, len = this._elements.length; i < len; ++i) {
             config.elements.push(this._elements[i].cloneNode(true));
         }
-        config.parent = config.parent || this._parent;
         config.onRender = config.onRender || this.onRender;
         config.onRendered = config.onRendered || this._onRendered;
         config.onUpdate = config.onUpdate || this._onUpdate;
         config.onUpdated = config.onUpdated || this._onUpdated;
         config.onRevoke = config.onRevoke || this._onRevoke;
         config.onRevoked = config.onRevoked || this._onRevoked;
-        config.context = config.context || {};
 
         return new View(config);
     }

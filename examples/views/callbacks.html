@@ -23,23 +23,35 @@
             context: {
                 message: 'Hello world!',
             },
+            onCreate: function () {
+                console.log('[onCreate]    I am called only once, before view fully created.');
+            },
+            onCreated: function () {
+                console.log('[onCreated]   I am called only once, after view is fully created.');
+            },
             onRender: function () {
-                console.log('[onRender]   I am called each time render() is called.');
+                console.log('[onRender]    I am called each time render() is called.');
             },
             onRendered: function () {
-                console.log('[onRendered] I am called after each render() call.');
+                console.log('[onRendered]  I am called after each render() call.');
             },
             onUpdate: function () {
-                console.log('[onUpdate]   I am called before each update.');
+                console.log('[onUpdate]    I am called before each update.');
             },
             onUpdated: function () {
-                console.log('[onUpdated]  I am called after each update.');
+                console.log('[onUpdated]   I am called after each update.');
             },
             onRevoke: function () {
-                console.log('[onRevoke]   I am called each time revove() is called.');
+                console.log('[onRevoke]    I am called each time revove() is called.');
             },
             onRevoked: function () {
-                console.log('[onRevoked]  I am called after each revoke() call.');
+                console.log('[onRevoked]   I am called after each revoke() call.');
+            },
+            onDestroy: function () {
+                console.log('[onDestroy]   I am called if destroy() is called.');
+            },
+            onDestroyed: function () {
+                console.log('[onDestroyed] I am called if destroy() destroyed me.');
             }
         });
 
@@ -73,6 +85,11 @@
         console.log('===================');
         view.render(); // Will launch onRender
         // Then onRendered and onUpdate (changes made when view was revoked now apply)
+
+        console.log('===================');
+        console.log('Destroy() is called.');
+        console.log('===================');
+        view.destroy(); // Will launch onDestroy, onRevoke, onRevoked, onDestroyed
     </script>
 </body>
 </html>
