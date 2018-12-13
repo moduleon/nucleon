@@ -42,7 +42,7 @@ View.prototype = {
     _onDestroy: null,
     _onDestroyed: null,
     // Inner vars
-    _elements: [],
+    _elements: null,
     _position: null,
     _fusioner: null,
     _rendered: false,
@@ -108,9 +108,10 @@ View.prototype = {
     },
 
     _prepareElements: function () {
-        if (this._elements.length) {
+        if (null !== this._elements) {
             return;
         }
+        this._elements = [];
 
         var self = this;
 
@@ -186,7 +187,7 @@ View.prototype = {
 
     _mount: function () {
         var create = false;
-        if (!this._elements.length) {
+        if (null === this._elements) {
             create = true;
             // Call onCreate callback
             if ('function' === typeof this._onCreate) {
@@ -328,21 +329,20 @@ View.prototype = {
     clone: function (config) {
         this._prepareElements();
         config = config || {};
+        config.context = config.context || {};
+        config.parent = config.parent || this._parent;
         config.root = config.root || this._root;
-        config.template = config.template || this._template;
-        config.templateUrl = config.templateUrl || this._templateUrl;
+        config.position = config.position || this._position;
         config.elements = [];
         for (var i = 0, len = this._elements.length; i < len; ++i) {
             config.elements.push(this._elements[i].cloneNode(true));
         }
-        config.parent = config.parent || this._parent;
         config.onRender = config.onRender || this.onRender;
         config.onRendered = config.onRendered || this._onRendered;
         config.onUpdate = config.onUpdate || this._onUpdate;
         config.onUpdated = config.onUpdated || this._onUpdated;
         config.onRevoke = config.onRevoke || this._onRevoke;
         config.onRevoked = config.onRevoked || this._onRevoked;
-        config.context = config.context || {};
 
         return new View(config);
     }
