@@ -1,0 +1,10 @@
+version: "2"
+
+services:
+    node:
+        volumes:
+            - ${COMPOSE_PROJECT_NAME}-data-volume:/app
+
+volumes:
+    nucleon-data-volume:
+        external: true
